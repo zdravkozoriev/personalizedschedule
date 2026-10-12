@@ -4,7 +4,7 @@
 import { parseCommand, matchScore } from './voice.js';
 
 const STORAGE_KEY = 'ps-data-v1';
-const APP_VERSION = '1.7 · 12.10.2026';
+const APP_VERSION = '1.8 · 12.10.2026';
 const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const DAY_LONG = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
 const MONTHS = ['януари', 'февруари', 'март', 'април', 'май', 'юни', 'юли', 'август', 'септември', 'октомври', 'ноември', 'декември'];
@@ -97,7 +97,6 @@ const entryById = id => state.entries.find(e => e.id === id);
 const taskOf = e => taskById(e.taskId) || { title: '(изтрита задача)', category: 'personal', recurrence: { type: 'none' } };
 const isRecurring = t => t.recurrence && t.recurrence.type !== 'none';
 const groupById = id => id ? (state.groups || []).find(g => g.id === id) : null;
-const GROUP_EMOJIS = ['📁', '💼', '🏠', '🛒', '📞', '✉️', '💪', '🧘', '📚', '💡', '🎯', '💰', '🚗', '👶', '❤️', '✈️', '🎨', '🧹', '🍳', '🩺', '🌱', '🐾', '🎁', '⚙️'];
 const sectionById = id => id ? state.sections.find(x => x.id === id) : null;
 const catCls = t => `cat-${t.category}${sectionById(t.sectionId) ? ' sec-' + t.sectionId : ''}`;
 const SECTION_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#ea580c', '#d97706', '#ca8a04', '#0d9488', '#0891b2', '#7c3aed', '#c026d3', '#db2777', '#64748b'];
@@ -226,8 +225,7 @@ const ui = {
   month: todayKey().slice(0, 7),
   libCat: 'all',
   libSection: 'all',
-  libView: 'list',
-  libGroup: null,
+  openGroups: new Set(),
   libSearch: '',
   showDone: false,
   scrolledFor: null,
@@ -564,7 +562,7 @@ function libraryRow(t) {
           ${isRecurring(t) ? `<span>↻ ${recurLabel(t.recurrence)}${t.defaultTime ? ' · ' + t.defaultTime : ''}</span>` : ''}
           ${up ? `<span>📅 ${fmtShort(up.date)}${up.start ? ' ' + up.start : ''}</span>` : ''}
           ${t.priority === 'high' ? '<span class="tag plain">Висок приоритет</span>' : ''}
-          ${groupById(t.groupId) && !(ui.libView === 'groups' && ui.libGroup) ? `<span>${groupById(t.groupId).emoji} ${esc(groupById(t.groupId).name)}</span>` : ''}
+          ${groupById(t.groupId) && ui.libSection === 'all' ? `<span>▸ ${esc(groupById(t.groupId).name)}</span>` : ''}
           ${t.location ? `<span>📍 ${esc(t.location)}</span>` : ''}
         </div>
       </div>
@@ -598,68 +596,75 @@ function taskStatusLists(tasks) {
     ${ui.showDone ? section('Завършени', done) : ''}`;
 }
 
-const libViewSwitch = () => `
-  <div class="seg" style="margin-bottom:12px">
-    <button class="${ui.libView === 'list' ? 'on' : ''}" data-action="lib-view" data-view="list">Всички задачи</button>
-    <button class="${ui.libView === 'groups' ? 'on' : ''}" data-action="lib-view" data-view="groups">Категории</button>
-  </div>`;
-
 function viewTasks() {
-  if (ui.libView === 'groups') return ui.libGroup ? viewGroup() : viewGroups();
-  const visible = state.tasks
+  migrateGroups();
+  const base = state.tasks
     .filter(t => !t.archived)
     .filter(t => ui.libCat === 'all' || t.category === ui.libCat)
-    .filter(t => ui.libSection === 'all' || (ui.libSection === 'none' ? !sectionById(t.sectionId) : t.sectionId === ui.libSection))
     .filter(searchMatch);
+  const sec = ui.libSection;
+  const body = sec === 'all'
+    ? taskStatusLists(base)
+    : sectionCategories(sec, base.filter(t => sec === 'none' ? !sectionById(t.sectionId) : t.sectionId === sec));
   return `
     <h1>Задачи</h1>
-    ${libViewSwitch()}
     <input class="search" type="search" id="lib-search" placeholder="Търси по име или място..." value="${esc(ui.libSearch)}">
     <div class="seg" style="margin-bottom:8px">
       ${['all', 'work', 'personal'].map(c => `<button class="${ui.libCat === c ? 'on' : ''}" data-action="lib-cat" data-cat="${c}">${c === 'all' ? 'Всички' : CATS[c]}</button>`).join('')}
     </div>
     ${sectionChips()}
     ${!state.tasks.length ? `<div class="empty">Тук ще са всички твои задачи.<br>Добави първата с бутона +.<br><br>Повтарящите се (всеки ден, всеки понеделник...) влизат в графика сами.</div>` : ''}
-    ${taskStatusLists(visible)}
+    ${body}
     <button class="fab" data-action="new-task">+</button>`;
 }
 
-const liveTasks = () => state.tasks.filter(t => !t.archived && !(t.done && !isRecurring(t)));
-
-function viewGroups() {
-  const live = liveTasks();
-  const card = (id, emoji, name, list) => `
-    <button class="gcard" data-action="open-group" data-id="${id}">
-      <span class="gemoji">${emoji}</span>
-      <b>${name}</b>
-      <span class="muted small">${list.length} ${list.length === 1 ? 'задача' : 'задачи'}</span>
-      <span class="gdots">${[...new Set(list.map(t => sectionById(t.sectionId)?.color).filter(Boolean))].slice(0, 5).map(c => `<i style="background:${c}"></i>`).join('')}</span>
-    </button>`;
-  const ungrouped = live.filter(t => !groupById(t.groupId));
-  return `
-    <h1>Задачи</h1>
-    ${libViewSwitch()}
-    <div class="ggrid">
-      ${(state.groups || []).map(g => card(g.id, g.emoji, esc(g.name), live.filter(t => t.groupId === g.id))).join('')}
-      ${ungrouped.length ? card('none', '🗂️', 'Без категория', ungrouped) : ''}
-      <button class="gcard add" data-action="new-group"><span class="gemoji">＋</span><b>Нова категория</b><span class="muted small">напр. Обаждания, Покупки</span></button>
-    </div>
-    ${!(state.groups || []).length ? '<p class="muted small" style="margin-top:12px">Категориите групират задачите по вид, например „Обаждания“, „Имейли“, „Покупки“. Разделите пък им дават цвят в графика.</p>' : ''}`;
+// Категориите принадлежат на раздел. По-стари категории без раздел получават
+// раздела, в който са повечето им задачи.
+function migrateGroups() {
+  let changed = false;
+  for (const g of state.groups || []) {
+    if ('sectionId' in g) continue;
+    const counts = {};
+    state.tasks.filter(t => t.groupId === g.id && t.sectionId).forEach(t => { counts[t.sectionId] = (counts[t.sectionId] || 0) + 1; });
+    g.sectionId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    changed = true;
+  }
+  if (changed) save();
 }
 
-function viewGroup() {
-  const g = groupById(ui.libGroup);
-  if (!g && ui.libGroup !== 'none') { ui.libGroup = null; return viewGroups(); }
-  const tasks = state.tasks.filter(t => !t.archived && (g ? t.groupId === g.id : !groupById(t.groupId))).filter(searchMatch);
+const groupsOfSection = sec => (state.groups || [])
+  .filter(g => (sectionById(g.sectionId) ? g.sectionId : 'none') === sec)
+  .sort((a, b) => a.name.localeCompare(b.name, 'bg'));
+
+// Категориите на избрания раздел като разгъващ се списък.
+function sectionCategories(sec, tasks) {
+  const groups = groupsOfSection(sec);
+  const ids = new Set(groups.map(g => g.id));
+  const searching = !!ui.libSearch.trim();
+  const row = (id, name, list, editable) => {
+    const active = sortTasks(list.filter(t => isRecurring(t) || !t.done));
+    const open = searching ? active.length > 0 : ui.openGroups.has(`${sec}:${id}`);
+    return `
+      <div class="cat ${open ? 'open' : ''}">
+        <div class="cat-head">
+          <button class="cat-name" data-action="toggle-group" data-id="${id}">
+            <span class="chev">›</span><b>${name}</b><span class="cat-count">${active.length}</span>
+          </button>
+          ${editable ? `<button class="iconbtn" data-action="edit-group" data-id="${id}" aria-label="Редактирай">⋯</button>` : ''}
+        </div>
+        ${open ? `<div class="cat-body">
+          ${active.length ? `<div class="stack">${active.map(libraryRow).join('')}</div>` : '<p class="muted small">Няма активни задачи.</p>'}
+          <button class="btn small full" style="margin-top:8px" data-action="new-task-in" data-group="${id === 'none' ? '' : id}">+ Задача тук</button>
+        </div>` : ''}
+      </div>`;
+  };
+  const rows = groups.map(g => row(g.id, esc(g.name), tasks.filter(t => t.groupId === g.id), true));
+  const loose = tasks.filter(t => !ids.has(t.groupId));
+  if (loose.length || !groups.length) rows.push(row('none', 'Без категория', loose, false));
   return `
-    <button class="backlink" data-action="group-back">‹ Категории</button>
-    <div class="row" style="margin:4px 0 12px">
-      <h1 class="grow" style="margin:0">${g ? `${g.emoji} ${esc(g.name)}` : '🗂️ Без категория'}</h1>
-      ${g ? `<button class="btn small" data-action="edit-group" data-id="${g.id}">Редактирай</button>` : ''}
-    </div>
-    <input class="search" type="search" id="lib-search" placeholder="Търси в категорията..." value="${esc(ui.libSearch)}">
-    ${tasks.length ? taskStatusLists(tasks) : '<div class="empty">Няма задачи в тази категория.<br>Добави с бутона +.</div>'}
-    <button class="fab" data-action="new-task">+</button>`;
+    <h3>Категории</h3>
+    <div class="cats">${rows.join('')}</div>
+    <button class="chip add" style="margin-top:10px" data-action="new-group">+ Категория</button>`;
 }
 
 function sectionChips() {
@@ -1124,13 +1129,13 @@ const sectionSelect = value => state.sections.length ? `
 
 // Раздел, избран в библиотеката, се предлага по подразбиране за нови задачи.
 const defaultSection = () => sectionById(ui.libSection) || null;
-const defaultGroup = () => (ui.tab === 'tasks' && ui.libView === 'groups' && groupById(ui.libGroup)) || null;
+const defaultGroup = () => groupById(sheet?.preset?.groupId) || null;
 
 const groupSelect = value => (state.groups || []).length ? `
   <label>Категория</label>
   <select name="groupId">
     <option value="">— Без категория —</option>
-    ${state.groups.map(g => `<option value="${g.id}" ${value === g.id ? 'selected' : ''}>${g.emoji} ${esc(g.name)}</option>`).join('')}
+    ${state.groups.map(g => `<option value="${g.id}" ${value === g.id ? 'selected' : ''}>${esc(g.name)}${sectionById(g.sectionId) ? ` · ${esc(sectionById(g.sectionId).name)}` : ''}</option>`).join('')}
   </select>` : '';
 
 const catRadios = value =>
@@ -1318,14 +1323,17 @@ function sheetSchedule() {
 
 function sheetGroup() {
   const g = groupById(sheet.id);
-  const v = g || { name: '', emoji: '📁' };
+  const sec = g ? g.sectionId : (sectionById(ui.libSection) ? ui.libSection : null);
   return `
     <h2>${g ? 'Редактирай категория' : 'Нова категория'}</h2>
     <form id="group-form">
       <label>Име</label>
-      <input name="name" required autocomplete="off" placeholder="напр. Обаждания, Покупки, Проекти" value="${esc(v.name)}" ${g ? '' : 'autofocus'}>
-      <label>Икона</label>
-      <div class="emojis">${GROUP_EMOJIS.map(e => `<label><input type="radio" name="emoji" value="${e}" ${v.emoji === e ? 'checked' : ''}>${e}</label>`).join('')}</div>
+      <input name="name" required autocomplete="off" placeholder="напр. Обаждания, Покупки, Проекти" value="${esc(g?.name || '')}" ${g ? '' : 'autofocus'}>
+      <label>Раздел</label>
+      <select name="sectionId">
+        <option value="">— Без раздел —</option>
+        ${state.sections.map(x => `<option value="${x.id}" ${sec === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}
+      </select>
       <div class="actions">
         ${g ? `<button type="button" class="btn danger" data-action="delete-group" data-id="${g.id}">Изтрий</button>` : ''}
         <button type="submit" class="btn primary">Запази</button>
@@ -1515,9 +1523,12 @@ const actions = {
   },
   'new-task': () => openSheet({ type: 'task', id: null }),
   'lib-section': el => { ui.libSection = el.dataset.id; render(); },
-  'lib-view': el => { ui.libView = el.dataset.view; ui.libGroup = null; ui.libSearch = ''; render(); },
-  'open-group': el => { ui.libGroup = el.dataset.id; ui.libSearch = ''; render(); window.scrollTo({ top: 0 }); },
-  'group-back': () => { ui.libGroup = null; ui.libSearch = ''; render(); },
+  'toggle-group': el => {
+    const key = `${ui.libSection}:${el.dataset.id}`;
+    if (ui.openGroups.has(key)) ui.openGroups.delete(key); else ui.openGroups.add(key);
+    render();
+  },
+  'new-task-in': el => openSheet({ type: 'task', id: null, preset: { groupId: el.dataset.group || null } }),
   'new-group': () => openSheet({ type: 'group', id: null }),
   'edit-group': el => openSheet({ type: 'group', id: el.dataset.id }),
   'delete-group': el => {
@@ -1525,7 +1536,6 @@ const actions = {
     if (!confirm(`Да изтрия ли категорията „${g.name}“? Задачите в нея остават.`)) return;
     state.groups = state.groups.filter(x => x !== g);
     state.tasks.forEach(t => { if (t.groupId === g.id) t.groupId = null; });
-    ui.libGroup = null;
     save(); closeSheet(); render();
   },
   'new-section': () => openSheet({ type: 'section', id: null }),
@@ -1770,11 +1780,15 @@ document.addEventListener('submit', ev => {
   } else if (form.id === 'group-form') {
     const name = String(f.get('name')).trim();
     if (!name) return;
-    const fields = { name, emoji: f.get('emoji') || '📁' };
+    const fields = { name, sectionId: f.get('sectionId') || null };
     state.groups = state.groups || [];
     const g = groupById(sheet.id);
     if (g) Object.assign(g, fields);
-    else state.groups.push({ id: uid(), ...fields });
+    else {
+      const id = uid();
+      state.groups.push({ id, ...fields });
+      ui.openGroups.add(`${ui.libSection}:${id}`);
+    }
     save(); closeSheet(); render();
     toast(g ? 'Категорията е запазена' : `Категория „${name}“ е създадена`);
   } else if (form.id === 'section-form') {

@@ -424,3 +424,15 @@ input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb
 .card.install { border-color: var(--accent); background: linear-gradient(135deg, rgba(45, 212, 191, .10), rgba(56, 189, 248, .08)), var(--card); }
 .card.install ol { padding-left: 20px; margin: 8px 0 4px; }
 .card.install li { margin: 4px 0; }
+
+/* Категории в раздел (разгъващ се списък) */
+.cats { display: flex; flex-direction: column; gap: 8px; }
+.cat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.cat.open { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.cat-head { display: flex; align-items: center; }
+.cat-name { flex: 1; display: flex; align-items: center; gap: 10px; padding: 14px; text-align: left; min-height: 52px; }
+.cat-name b { flex: 1; font-size: 16px; }
+.chev { color: var(--accent); font-size: 20px; line-height: 1; transition: transform .15s; width: 12px; }
+.cat.open .chev { transform: rotate(90deg); }
+.cat-count { min-width: 26px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; text-align: center; }
+.cat-body { padding: 0 10px 12px; }
