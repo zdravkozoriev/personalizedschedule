@@ -46,3 +46,17 @@
 python3 -m http.server 8000
 # отвори http://localhost:8000
 ```
+
+## Стартиране на компютъра с Docker (Windows)
+
+1. Инсталирай [Docker Desktop](https://www.docker.com/products/docker-desktop/) и го стартирай. Остави режима **Linux containers** (по подразбиране).
+2. Изтегли кода: в GitHub натисни **Code → Download ZIP** и разархивирай (или `git clone`).
+3. Отвори PowerShell в папката и изпълни:
+   ```powershell
+   docker compose up -d --build
+   ```
+4. Отвори http://localhost:8080 в Chrome или Edge. С иконата за инсталиране в адресната лента приложението става отделна програма.
+
+Контейнерът тръгва автоматично заедно с Docker Desktop. След обновяване на кода изпълни отново `docker compose up -d --build`. Спиране: `docker compose down`.
+
+> Този вариант е само за компютъра. Телефонът не може да го ползва (няма HTTPS), а данните на компютъра и телефона са отделни.

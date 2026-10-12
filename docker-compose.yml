@@ -1,0 +1,7 @@
+services:
+  grafik:
+    build: .
+    container_name: grafik
+    ports:
+      - "8080:80"
+    restart: unless-stopped
