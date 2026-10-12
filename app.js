@@ -4,7 +4,7 @@
 import { parseCommand, matchScore } from './voice.js';
 
 const STORAGE_KEY = 'ps-data-v1';
-const APP_VERSION = '1.8 · 12.10.2026';
+const APP_VERSION = '1.9 · 12.10.2026';
 const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const DAY_LONG = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
 const MONTHS = ['януари', 'февруари', 'март', 'април', 'май', 'юни', 'юли', 'август', 'септември', 'октомври', 'ноември', 'декември'];
@@ -299,6 +299,7 @@ function entryItem(e, opts = {}) {
           ${t.priority === 'high' ? '<span class="tag plain">!</span>' : ''}
           ${t.location ? `<span>📍 ${esc(t.location)}</span>` : ''}
         </div>
+        ${noteOf(t) ? `<div class="inote">${esc(noteOf(t))}</div>` : ''}
       </div>
     </div>`;
 }
@@ -427,10 +428,27 @@ function layoutLanes(timed) {
 }
 
 // Подзадачите, които се побират във височината на блока в графика.
+const NOTE_LINE_PX = 17;
+const noteOf = t => (t.notes || '').trim();
+
+// Колко реда от бележката да се покажат в блок с височина h (останалото място е за подзадачите).
+function noteLines(t, h) {
+  if (!noteOf(t) || h < 58) return 0;
+  const free = Math.floor((h - 44) / NOTE_LINE_PX);
+  // Приблизително колко реда заема бележката (~36 знака на ред в блока).
+  const needed = noteOf(t).split('\n').reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 36)), 0);
+  return Math.max(1, Math.min(4, needed, subsOf(t).length ? Math.ceil(free / 2) : free));
+}
+
+function blockNote(t, h) {
+  const n = noteLines(t, h);
+  return n ? `<div class="bnote" style="-webkit-line-clamp:${n}">${esc(noteOf(t))}</div>` : '';
+}
+
 function blockSubs(e, t, h) {
   const subs = subsOf(t);
   if (!subs.length || h < 60) return '';
-  const fit = Math.floor((h - 44) / 22);
+  const fit = Math.floor((h - 44 - noteLines(t, h) * NOTE_LINE_PX - 4) / 22);
   if (fit < 1) return '';
   const shown = subs.length > fit ? subs.slice(0, fit - 1) : subs;
   return `<div class="bsubs">${shown.map(x => `
@@ -463,7 +481,7 @@ function timeline(k, timed) {
       <div class="block ${catCls(t)} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}"
            style="top:${y(it.s)}px;height:${h}px;left:${left};width:${width}">
         <button class="check ${e.done ? 'on' : ''}" data-action="toggle-done" data-id="${e.id}">${e.done ? '✓' : ''}</button>
-        <div class="bb"><div class="bt">${esc(t.title)}</div>${h >= 40 ? `<div class="bs">${e.start}–${fromMin(it.end % 1440)}${t.location ? ` · 📍 ${esc(t.location)}` : ''}${subsOf(t).length ? ` · ☑ ${subProgress(e).done}/${subsOf(t).length}` : ''}</div>` : ''}${blockSubs(e, t, h)}</div>
+        <div class="bb"><div class="bt">${esc(t.title)}${noteOf(t) && h < 40 ? ` <span class="bnote-inline">📝 ${esc(noteOf(t))}</span>` : ''}</div>${h >= 40 ? `<div class="bs">${e.start}–${fromMin(it.end % 1440)}${t.location ? ` · 📍 ${esc(t.location)}` : ''}${subsOf(t).length ? ` · ☑ ${subProgress(e).done}/${subsOf(t).length}` : ''}${noteOf(t) && h < 58 ? ` · 📝 ${esc(noteOf(t))}` : ''}</div>` : ''}${blockNote(t, h)}${blockSubs(e, t, h)}</div>
       </div>`;
   }
   return html + '</div>';
