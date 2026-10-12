@@ -1,5 +1,6 @@
-// Офлайн кеш: показва запазената версия веднага и я обновява във фона.
-const CACHE = 'grafik-v4';
+// Офлайн кеш: при интернет винаги зарежда най-новата версия,
+// а без интернет показва последната запазена.
+const CACHE = 'grafik-v5';
 const ASSETS = [
   './',
   'index.html',
@@ -11,9 +12,14 @@ const ASSETS = [
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
 ];
+const NETWORK_TIMEOUT_MS = 4000;
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
@@ -27,13 +33,20 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  event.respondWith(
-    caches.open(CACHE).then(async cache => {
-      const cached = await cache.match(req, { ignoreSearch: true });
-      const fresh = fetch(req)
-        .then(res => { if (res.ok) cache.put(req, res.clone()); return res; })
-        .catch(() => cached);
-      return cached || fresh;
-    })
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    try {
+      // „no-cache“ пита сървъра дали има промяна, без да тегли наново непроменените файлове.
+      const res = await Promise.race([
+        fetch(req.url, { cache: 'no-cache' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), NETWORK_TIMEOUT_MS)),
+      ]);
+      if (res.ok) cache.put(req, res.clone());
+      return res;
+    } catch {
+      const cached = await cache.match(req, { ignoreSearch: true })
+        || (req.mode === 'navigate' && await cache.match('./'));
+      return cached || Response.error();
+    }
+  })());
 });

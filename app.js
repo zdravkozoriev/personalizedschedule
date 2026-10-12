@@ -4,6 +4,7 @@
 import { parseCommand, matchScore } from './voice.js';
 
 const STORAGE_KEY = 'ps-data-v1';
+const APP_VERSION = '1.5 · 12.10.2026';
 const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const DAY_LONG = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
 const MONTHS = ['януари', 'февруари', 'март', 'април', 'май', 'юни', 'юли', 'август', 'септември', 'октомври', 'ноември', 'декември'];
@@ -962,6 +963,7 @@ function settingsCard() {
         <button class="btn grow" data-action="import">Възстанови</button>
       </div>
       <input type="file" id="import-file" accept="application/json,.json" hidden>
+      <p class="muted small" style="margin-top:14px;text-align:center">Версия ${APP_VERSION}</p>
     </div>`;
 }
 
@@ -1758,5 +1760,19 @@ setInterval(() => { if (!sheet && ui.tab === 'day' && document.visibilityState =
 
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    // Телефонът често „събужда“ приложението, без да го зарежда наново, затова проверяваме за нова версия.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    });
+  }).catch(() => {});
+  // Когато се инсталира нова версия, презареждаме веднъж, за да се покаже веднага.
+  if (navigator.serviceWorker.controller) {
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded || sheet) return;
+      reloaded = true;
+      location.reload();
+    });
+  }
 }
