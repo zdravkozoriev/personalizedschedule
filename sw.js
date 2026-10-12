@@ -1,5 +1,5 @@
 // Офлайн кеш: показва запазената версия веднага и я обновява във фона.
-const CACHE = 'grafik-v2';
+const CACHE = 'grafik-v3';
 const ASSETS = [
   './',
   'index.html',

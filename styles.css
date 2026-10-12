@@ -359,3 +359,26 @@ summary { font-weight: 600; color: var(--accent); padding: 8px 0; cursor: pointe
 .note-title { font-size: 20px; font-weight: 700; border: 0; background: transparent; padding: 4px 0; }
 .note-body { min-height: 240px; }
 .backdrop.still, .backdrop.still .sheet { animation: none; }
+
+/* Sections */
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line);
+  font-size: 14px; white-space: nowrap;
+}
+.chip i { width: 10px; height: 10px; border-radius: 50%; }
+.chip span { color: var(--muted); font-size: 12px; }
+.chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.chip.add { color: var(--accent); border-style: dashed; }
+.swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.swatches label {
+  margin: 0; aspect-ratio: 1; border-radius: 50%;
+  background: var(--sw); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.swatches input { display: none; }
+.swatches label:has(input:checked) { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--sw); }
+.swatches label:has(input:checked)::after { content: "✓"; color: #fff; font-weight: 700; }

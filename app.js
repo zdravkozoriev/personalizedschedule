@@ -60,6 +60,7 @@ function defaultState() {
     weekly: {},
     dayNotes: {},
     notes: [],
+    sections: [],
     lastEveningReview: null,
     settings: { dayStart: 6, dayEnd: 23, capacityHours: 8, reviewHour: 19 },
   };
@@ -93,6 +94,18 @@ const taskById = id => state.tasks.find(t => t.id === id);
 const entryById = id => state.entries.find(e => e.id === id);
 const taskOf = e => taskById(e.taskId) || { title: '(изтрита задача)', category: 'personal', recurrence: { type: 'none' } };
 const isRecurring = t => t.recurrence && t.recurrence.type !== 'none';
+const sectionById = id => id ? state.sections.find(x => x.id === id) : null;
+const catCls = t => `cat-${t.category}${sectionById(t.sectionId) ? ' sec-' + t.sectionId : ''}`;
+const SECTION_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#ea580c', '#d97706', '#ca8a04', '#0d9488', '#0891b2', '#7c3aed', '#c026d3', '#db2777', '#64748b'];
+
+// Цветовете на разделите се задават като CSS класове .sec-<id>.
+function applySectionStyles() {
+  let el = document.getElementById('section-styles');
+  if (!el) { el = document.createElement('style'); el.id = 'section-styles'; document.head.appendChild(el); }
+  el.textContent = state.sections.map(x =>
+    `.sec-${x.id}{--c:${x.color};--cs:color-mix(in srgb, ${x.color} 18%, var(--card))}`).join('\n');
+}
+
 const mapsUrl = place => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
 const knownLocations = () => [...new Set(state.tasks.filter(t => !t.archived && t.location).map(t => t.location))].sort((a, b) => a.localeCompare(b, 'bg'));
 const locationDatalist = () => `<datalist id="loc-list">${knownLocations().map(l => `<option value="${esc(l)}">`).join('')}</datalist>`;
@@ -200,6 +213,7 @@ const ui = {
   weekOf: weekStart(todayKey()),
   month: todayKey().slice(0, 7),
   libCat: 'all',
+  libSection: 'all',
   libSearch: '',
   showDone: false,
   scrolledFor: null,
@@ -210,6 +224,7 @@ const $view = document.getElementById('view');
 const $sheet = document.getElementById('sheet-root');
 
 function render() {
+  applySectionStyles();
   const navTab = ui.tab === 'month' ? 'week' : ui.tab;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === navTab));
   document.querySelector('#tabs .dot').hidden = !(eveningPending() || weeklyPending());
@@ -259,7 +274,7 @@ function capacityBar(list, capMin) {
 function entryItem(e, opts = {}) {
   const t = taskOf(e);
   return `
-    <div class="item cat-${t.category} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}">
+    <div class="item ${catCls(t)} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}">
       <button class="check ${e.done ? 'on' : ''}" data-action="toggle-done" data-id="${e.id}" aria-label="Готово">${e.done ? '✓' : ''}</button>
       <div class="body">
         <div class="t">${esc(t.title)}</div>
@@ -370,7 +385,7 @@ function timeline(k, timed) {
     const left = `calc(52px + (100% - 54px) * ${it.lane} / ${it.lanes})`;
     const width = `calc((100% - 54px) / ${it.lanes} - 3px)`;
     html += `
-      <div class="block cat-${t.category} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}"
+      <div class="block ${catCls(t)} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}"
            style="top:${y(it.s)}px;height:${h}px;left:${left};width:${width}">
         <button class="check ${e.done ? 'on' : ''}" data-action="toggle-done" data-id="${e.id}">${e.done ? '✓' : ''}</button>
         <div><div class="bt">${esc(t.title)}</div>${h >= 40 ? `<div class="bs">${e.start}–${fromMin(it.end % 1440)}${t.location ? ` · 📍 ${esc(t.location)}` : ''}</div>` : ''}</div>
@@ -405,7 +420,7 @@ function viewWeek() {
         <div class="bar"><i class="w" style="width:${m.work / scale * 100}%"></i><i class="p" style="width:${m.personal / scale * 100}%"></i></div>
         ${list.length ? list.map(e => {
           const tk = taskOf(e);
-          return `<button class="mini cat-${tk.category} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}">
+          return `<button class="mini ${catCls(tk)} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}">
             <i class="pip"></i><span class="tm">${e.start || '—'}</span><span class="ttl">${esc(tk.title)}</span></button>`;
         }).join('') : '<div class="muted small">Нищо планирано</div>'}
       </div>`;
@@ -463,11 +478,11 @@ function viewMonth() {
 function libraryRow(t) {
   const up = !isRecurring(t) && upcomingEntry(t);
   return `
-    <div class="item cat-${t.category} ${t.done ? 'done' : ''}" data-action="edit-task" data-id="${t.id}">
+    <div class="item ${catCls(t)} ${t.done ? 'done' : ''}" data-action="edit-task" data-id="${t.id}">
       <div class="body">
         <div class="t">${esc(t.title)}</div>
         <div class="s">
-          <span class="tag">${CATS[t.category]}</span>
+          <span class="tag">${sectionById(t.sectionId) ? esc(sectionById(t.sectionId).name) : CATS[t.category]}</span>
           <span>${fmtDur(t.duration)}</span>
           ${isRecurring(t) ? `<span>↻ ${recurLabel(t.recurrence)}${t.defaultTime ? ' · ' + t.defaultTime : ''}</span>` : ''}
           ${up ? `<span>📅 ${fmtShort(up.date)}${up.start ? ' ' + up.start : ''}</span>` : ''}
@@ -485,6 +500,7 @@ function viewTasks() {
   const visible = state.tasks
     .filter(t => !t.archived)
     .filter(t => ui.libCat === 'all' || t.category === ui.libCat)
+    .filter(t => ui.libSection === 'all' || (ui.libSection === 'none' ? !sectionById(t.sectionId) : t.sectionId === ui.libSection))
     .filter(t => !q || t.title.toLowerCase().includes(q) || (t.location || '').toLowerCase().includes(q))
     .sort((a, b) => (prio[a.priority] ?? 1) - (prio[b.priority] ?? 1) || a.title.localeCompare(b.title, 'bg'));
   const recurring = visible.filter(isRecurring);
@@ -501,6 +517,7 @@ function viewTasks() {
     <div class="seg" style="margin-bottom:8px">
       ${['all', 'work', 'personal'].map(c => `<button class="${ui.libCat === c ? 'on' : ''}" data-action="lib-cat" data-cat="${c}">${c === 'all' ? 'Всички' : CATS[c]}</button>`).join('')}
     </div>
+    ${sectionChips()}
     ${!state.tasks.length ? `<div class="empty">Тук ще са всички твои задачи.<br>Добави първата с бутона +.<br><br>Повтарящите се (всеки ден, всеки понеделник...) влизат в графика сами.</div>` : ''}
     ${section('Чакат да бъдат планирани', unplanned)}
     ${section('Повтарящи се', recurring)}
@@ -508,6 +525,25 @@ function viewTasks() {
     ${done.length ? `<button class="btn small full" style="margin-top:16px" data-action="toggle-show-done">${ui.showDone ? 'Скрий' : 'Покажи'} завършените (${done.length})</button>` : ''}
     ${ui.showDone ? section('Завършени', done) : ''}
     <button class="fab" data-action="new-task">+</button>`;
+}
+
+function sectionChips() {
+  const live = state.tasks.filter(t => !t.archived && !(t.done && !isRecurring(t)));
+  const count = id => live.filter(t => t.sectionId === id).length;
+  const chip = (id, label, color, n) => `
+    <button class="chip ${ui.libSection === id ? 'on' : ''}" data-action="lib-section" data-id="${id}">
+      ${color ? `<i style="background:${color}"></i>` : ''}${label}${n ? ` <span>${n}</span>` : ''}
+    </button>`;
+  const cur = sectionById(ui.libSection);
+  return `
+    <div class="chips">
+      ${chip('all', 'Всички раздели')}
+      ${state.sections.map(x => chip(x.id, esc(x.name), x.color, count(x.id))).join('')}
+      ${state.sections.length ? chip('none', 'Без раздел') : ''}
+      <button class="chip add" data-action="new-section">+ Раздел</button>
+    </div>
+    ${cur ? `<div class="row" style="margin:-2px 0 6px"><span class="grow muted small">Новите задачи тук влизат в „${esc(cur.name)}“</span>
+      <button class="btn small" data-action="edit-section" data-id="${cur.id}">Редактирай раздела</button></div>` : ''}`;
 }
 
 // ---------- Изглед: Бележки ----------
@@ -793,7 +829,7 @@ function eveningReview() {
         <div class="stack">${pending.map(e => {
           const tk = taskOf(e);
           return `
-            <div class="item review-item cat-${tk.category}">
+            <div class="item review-item ${catCls(tk)}">
               <div class="body"><div class="t">${esc(tk.title)}</div>
                 <div class="s">${e.date !== t ? `<span class="tag plain">от ${fmtShort(e.date)}</span>` : ''}${e.start ? `<span>${e.start}</span>` : ''}<span>${fmtDur(e.duration)}</span></div></div>
               <div class="acts">
@@ -864,7 +900,7 @@ function weeklyReview() {
 
       <h3>2. Недовършено от миналата седмица (${carry.length})</h3>
       ${carry.length ? `<div class="stack">${carry.map(e => `
-        <div class="item review-item cat-${taskOf(e).category}">
+        <div class="item review-item ${catCls(taskOf(e))}">
           <div class="body"><div class="t">${esc(taskOf(e).title)}</div><div class="s"><span>${fmtShort(e.date)}</span><span>${fmtDur(e.duration)}</span></div></div>
           <div class="acts"><select data-change="carry-move" data-id="${e.id}">${dayOptions()}</select>
             <button class="btn small danger" data-action="carry-drop" data-id="${e.id}">Отпада</button></div>
@@ -875,7 +911,7 @@ function weeklyReview() {
 
       <h3>4. Задачи без дата (${backlog.length})</h3>
       ${backlog.length ? `<div class="stack">${backlog.map(tk => `
-        <div class="item review-item cat-${tk.category}">
+        <div class="item review-item ${catCls(tk)}">
           <div class="body"><div class="t">${esc(tk.title)}</div><div class="s"><span>${fmtDur(tk.duration)}</span>${tk.priority === 'high' ? '<span class="tag plain">!</span>' : ''}</div></div>
           <div class="acts"><select data-change="backlog-plan" data-id="${tk.id}">${dayOptions()}</select></div>
         </div>`).join('')}</div>` : '<p class="muted small">Всички задачи са планирани.</p>'}
@@ -927,7 +963,7 @@ function closeSheet() {
 
 function renderSheet() {
   if (!sheet) return closeSheet();
-  const body = { add: sheetAdd, entry: sheetEntry, task: sheetTask, schedule: sheetSchedule, note: sheetNote, voice: sheetVoice }[sheet.type]();
+  const body = { add: sheetAdd, entry: sheetEntry, task: sheetTask, schedule: sheetSchedule, note: sheetNote, voice: sheetVoice, section: sheetSection }[sheet.type]();
   // При повторно рисуване на същия панел пазим позицията на скрола и не анимираме.
   const old = $sheet.querySelector('.sheet');
   const same = old && $sheet.dataset.key === `${sheet.type}:${sheet.id || ''}`;
@@ -942,6 +978,16 @@ function renderSheet() {
 const durationSelect = (name, value) =>
   `<select name="${name}">${DURATIONS.map(d => `<option value="${d}" ${d === value ? 'selected' : ''}>${fmtDur(d)}</option>`).join('')}</select>`;
 
+const sectionSelect = value => state.sections.length ? `
+  <label>Раздел</label>
+  <select name="sectionId" data-change="section-pick">
+    <option value="">— Без раздел —</option>
+    ${state.sections.map(x => `<option value="${x.id}" ${value === x.id ? 'selected' : ''}>● ${esc(x.name)}</option>`).join('')}
+  </select>` : '';
+
+// Раздел, избран в библиотеката, се предлага по подразбиране за нови задачи.
+const defaultSection = () => sectionById(ui.libSection) || null;
+
 const catRadios = value =>
   `<div class="seg">${Object.entries(CATS).map(([k, l]) => `<label><input type="radio" name="category" value="${k}" ${value === k ? 'checked' : ''}>${l}</label>`).join('')}</div>`;
 
@@ -954,7 +1000,7 @@ function addPickList(q) {
   if (!list.length) return `<div class="muted small">${q ? 'Няма съвпадения. Създай я отдолу.' : 'Списъкът със задачи е празен.'}</div>`;
   return list.map(tk => {
     const up = !isRecurring(tk) && upcomingEntry(tk);
-    return `<button class="item cat-${tk.category}" data-action="add-pick" data-id="${tk.id}">
+    return `<button class="item ${catCls(tk)}" data-action="add-pick" data-id="${tk.id}">
       <div class="body"><div class="t">${esc(tk.title)}</div>
       <div class="s"><span class="tag">${CATS[tk.category]}</span><span>${fmtDur(tk.duration)}</span>
       ${isRecurring(tk) ? '<span>↻</span>' : ''}${up ? `<span>вече в ${fmtShort(up.date)}</span>` : ''}</div></div>
@@ -976,8 +1022,9 @@ function sheetAdd() {
       <form id="quick-form">
         <label>Заглавие</label>
         <input name="title" required autocomplete="off">
+        ${sectionSelect(defaultSection()?.id)}
         <label>Категория</label>
-        ${catRadios('work')}
+        ${catRadios(defaultSection()?.category || 'work')}
         <div class="row">
           <div class="grow"><label>Продължителност</label>${durationSelect('duration', 30)}</div>
           <div class="grow"><label>Място (по избор)</label><input name="location" list="loc-list" autocomplete="off"></div>
@@ -995,7 +1042,7 @@ function sheetEntry() {
   return `
     <h2>${esc(t.title)}</h2>
     <div class="row wrap" style="margin-bottom:8px">
-      <span class="tag cat-${t.category}">${CATS[t.category]}</span>
+      <span class="tag ${catCls(t)}">${CATS[t.category]}</span>
       ${isRecurring(t) ? `<span class="tag plain">↻ ${recurLabel(t.recurrence)}</span>` : ''}
       <span class="muted small">${fmtDate(e.date)}</span>
     </div>
@@ -1031,7 +1078,8 @@ function sheetEntry() {
 
 function sheetTask() {
   const t = sheet.id ? taskById(sheet.id) : null;
-  const v = t || { title: '', category: 'work', duration: 30, priority: 'normal', recurrence: { type: 'none', days: [], dayOfMonth: 1 }, defaultTime: '', notes: '', location: '' };
+  const ds = defaultSection();
+  const v = t || { title: '', category: ds?.category || 'work', sectionId: ds?.id || null, duration: 30, priority: 'normal', recurrence: { type: 'none', days: [], dayOfMonth: 1 }, defaultTime: '', notes: '', location: '' };
   const r = v.recurrence || { type: 'none' };
   const rtypes = { none: 'Еднократна', daily: 'Всеки ден', weekdays: 'Делнични дни (Пн–Пт)', weekly: 'В определени дни от седмицата', monthly: 'Веднъж месечно' };
   return `
@@ -1039,6 +1087,7 @@ function sheetTask() {
     <form id="task-form">
       <label>Заглавие</label>
       <input name="title" required autocomplete="off" value="${esc(v.title)}" ${t ? '' : 'autofocus'}>
+      ${sectionSelect(v.sectionId)}
       <label>Категория</label>
       ${catRadios(v.category)}
       <div class="row">
@@ -1090,6 +1139,30 @@ function sheetSchedule() {
       <label>Час (по избор)</label>
       <input type="time" name="start" value="${t.defaultTime || ''}" step="900">
       <button class="btn primary full" style="margin-top:14px" type="submit">Сложи в графика</button>
+    </form>`;
+}
+
+function sheetSection() {
+  const x = sectionById(sheet.id);
+  const v = x || { name: '', color: SECTION_COLORS.find(c => !state.sections.some(z => z.color === c)) || SECTION_COLORS[0], category: '' };
+  const n = x ? state.tasks.filter(t => !t.archived && t.sectionId === x.id).length : 0;
+  return `
+    <h2>${x ? 'Редактирай раздел' : 'Нов раздел'}</h2>
+    <form id="section-form">
+      <label>Име</label>
+      <input name="name" required autocomplete="off" placeholder="напр. Клиент А, Дом, Здраве, Деца" value="${esc(v.name)}" ${x ? '' : 'autofocus'}>
+      <label>Цвят (така ще изглеждат задачите в графика)</label>
+      <div class="swatches">${SECTION_COLORS.map(c => `<label style="--sw:${c}"><input type="radio" name="color" value="${c}" ${v.color === c ? 'checked' : ''}></label>`).join('')}</div>
+      <label>Задачите в този раздел са</label>
+      <div class="seg">
+        ${[['work', 'Работа'], ['personal', 'Лично'], ['', 'Смесени']].map(([k, l]) => `<label><input type="radio" name="category" value="${k}" ${v.category === k ? 'checked' : ''}>${l}</label>`).join('')}
+      </div>
+      <p class="muted small">Използва се за статистиката работа/лично и се попълва автоматично при нова задача.</p>
+      <div class="actions">
+        ${x ? `<button type="button" class="btn danger" data-action="delete-section" data-id="${x.id}">Изтрий</button>` : ''}
+        <button type="submit" class="btn primary">Запази</button>
+      </div>
+      ${x && n ? `<p class="muted small">${n} задачи в този раздел. Ако го изтриеш, те остават, но без раздел.</p>` : ''}
     </form>`;
 }
 
@@ -1235,6 +1308,17 @@ const actions = {
     toast('Седмицата е планирана! ☀️');
   },
   'new-task': () => openSheet({ type: 'task', id: null }),
+  'lib-section': el => { ui.libSection = el.dataset.id; render(); },
+  'new-section': () => openSheet({ type: 'section', id: null }),
+  'edit-section': el => openSheet({ type: 'section', id: el.dataset.id }),
+  'delete-section': el => {
+    const x = sectionById(el.dataset.id);
+    if (!confirm(`Да изтрия ли раздела „${x.name}“? Задачите в него остават.`)) return;
+    state.sections = state.sections.filter(z => z !== x);
+    state.tasks.forEach(t => { if (t.sectionId === x.id) t.sectionId = null; });
+    if (ui.libSection === x.id) ui.libSection = 'all';
+    save(); closeSheet(); render();
+  },
   'new-note': () => { const n = newNote({}); openSheet({ type: 'note', id: n.id }); },
   'open-note': el => openSheet({ type: 'note', id: el.dataset.id }),
   'note-item-toggle': el => {
@@ -1372,6 +1456,12 @@ document.addEventListener('change', ev => {
       document.getElementById('r-time').hidden = el.value === 'none';
       return;
     }
+    case 'section-pick': {
+      const x = sectionById(el.value);
+      const radio = x?.category && el.form.querySelector(`[name=category][value=${x.category}]`);
+      if (radio) radio.checked = true;
+      return;
+    }
     case 'day-note':
       state.dayNotes[todayKey()] = el.value;
       return save();
@@ -1437,10 +1527,19 @@ document.addEventListener('submit', ev => {
   if (form.id === 'quick-form') {
     const title = String(f.get('title')).trim();
     if (!title) return;
-    const t = newTask({ title, category: f.get('category') || 'work', duration: Number(f.get('duration')), location: String(f.get('location') || '').trim() });
+    const t = newTask({ title, category: f.get('category') || 'work', sectionId: f.get('sectionId') || null, duration: Number(f.get('duration')), location: String(f.get('location') || '').trim() });
     addEntry(t, sheet.date, document.getElementById('add-time').value || null);
     save(); closeSheet(); render();
     toast(`„${title}“ е добавена`);
+  } else if (form.id === 'section-form') {
+    const name = String(f.get('name')).trim();
+    if (!name) return;
+    const fields = { name, color: f.get('color') || SECTION_COLORS[0], category: f.get('category') || '' };
+    const x = sectionById(sheet.id);
+    if (x) Object.assign(x, fields);
+    else ui.libSection = state.sections[state.sections.push({ id: uid(), ...fields }) - 1].id;
+    save(); closeSheet(); render();
+    toast(x ? 'Разделът е запазен' : `Раздел „${name}“ е създаден`);
   } else if (form.id === 'voice-form') {
     const text = document.getElementById('voice-text').value;
     if (text.trim()) showVoiceResult(text);
@@ -1491,6 +1590,7 @@ function saveTaskForm(f) {
   const fields = {
     title,
     category: f.get('category') || 'work',
+    sectionId: f.get('sectionId') || null,
     duration: Number(f.get('duration')),
     priority: f.get('priority'),
     recurrence,
