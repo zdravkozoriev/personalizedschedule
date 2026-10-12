@@ -1,10 +1,11 @@
 // Офлайн кеш: показва запазената версия веднага и я обновява във фона.
-const CACHE = 'grafik-v1';
+const CACHE = 'grafik-v2';
 const ASSETS = [
   './',
   'index.html',
   'styles.css',
   'app.js',
+  'voice.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',

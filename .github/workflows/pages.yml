@@ -25,7 +25,7 @@ jobs:
       - name: Подготви файловете
         run: |
           mkdir _site
-          cp -r index.html styles.css app.js sw.js manifest.webmanifest icons _site/
+          cp -r index.html styles.css app.js voice.js sw.js manifest.webmanifest icons _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
