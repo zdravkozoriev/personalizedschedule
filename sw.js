@@ -1,6 +1,6 @@
 // Офлайн кеш: при интернет винаги зарежда най-новата версия,
 // а без интернет показва последната запазена.
-const CACHE = 'grafik-v6';
+const CACHE = 'grafik-v7';
 const ASSETS = [
   './',
   'index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
+  'icons/icon-maskable-512.png',
 ];
 const NETWORK_TIMEOUT_MS = 4000;
 

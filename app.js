@@ -4,7 +4,7 @@
 import { parseCommand, matchScore } from './voice.js';
 
 const STORAGE_KEY = 'ps-data-v1';
-const APP_VERSION = '1.6 · 12.10.2026';
+const APP_VERSION = '1.7 · 12.10.2026';
 const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const DAY_LONG = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
 const MONTHS = ['януари', 'февруари', 'март', 'април', 'май', 'юни', 'юли', 'август', 'септември', 'октомври', 'ноември', 'декември'];
@@ -318,6 +318,54 @@ function focusCard(wk) {
   return `<div class="card focus"><b>Фокус за седмицата</b><ol>${goals.map(g => `<li>${esc(g)}</li>`).join('')}</ol></div>`;
 }
 
+// ---------- Инсталиране като приложение ----------
+
+let installPrompt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+window.addEventListener('beforeinstallprompt', ev => {
+  ev.preventDefault();
+  installPrompt = ev;
+  if (!sheet) render();
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  toast('Приложението е инсталирано ✓');
+  if (!sheet) render();
+});
+
+function installCard() {
+  if (isStandalone()) return '';
+  if (installPrompt) {
+    return `<div class="card install">
+      <b>📲 Инсталирай „Графикът ми“</b>
+      <p class="muted small">Ще се отваря като истинско приложение от началния екран, на цял екран и без интернет.</p>
+      <button class="btn primary full" data-action="install">Инсталирай</button>
+    </div>`;
+  }
+  if (isIOS) {
+    const inSafari = !/crios|fxios|edgios/i.test(navigator.userAgent);
+    return `<div class="card install">
+      <b>📲 Добави към началния екран</b>
+      <ol class="small">
+        ${inSafari ? '' : '<li>Копирай адреса и го отвори в <b>Safari</b>.</li>'}
+        <li>Натисни <b>„Сподели“</b> (квадратче със стрелка нагоре) в долната лента.</li>
+        <li>Превърти надолу и избери <b>„Добави към началния екран“</b>.</li>
+        <li>Натисни <b>„Добави“</b> горе вдясно.</li>
+      </ol>
+    </div>`;
+  }
+  return `<div class="card install">
+    <b>📲 Инсталирай като приложение</b>
+    <ol class="small">
+      <li>Натисни менюто <b>⋮</b> горе вдясно в Chrome.</li>
+      <li>Избери <b>„Инсталиране на приложението“</b> или <b>„Добавяне към началния екран“</b> → <b>„Инсталиране“</b>.</li>
+    </ol>
+    <p class="muted small">Ако опцията липсва: затвори всички раздели с приложението, отвори адреса наново и изчакай няколко секунди.</p>
+  </div>`;
+}
+
 // ---------- Изглед: Ден ----------
 
 function viewDay() {
@@ -344,6 +392,7 @@ function viewDay() {
       <button class="iconbtn" data-action="day-shift" data-n="1">›</button>
     </div>
     ${k !== t ? `<button class="btn small full" style="margin-bottom:12px" data-action="go-today">Към днес</button>` : ''}
+    ${k === t ? installCard() : ''}
     ${banners}
     ${focusCard(weekStart(k))}
     ${capacityBar(list, s.capacityHours * 60)}
@@ -1016,6 +1065,7 @@ function settingsCard() {
   return `
     <div class="card">
       <h2>⚙️ Настройки</h2>
+      ${installCard()}
       <div class="row"><div class="grow">${num('dayStart', 'Денят започва (час)', 0, 23)}</div><div class="grow">${num('dayEnd', 'Денят свършва (час)', 1, 24)}</div></div>
       ${num('capacityHours', 'Колко часа задачи реално мога да свърша на ден', 1, 18)}
       ${num('reviewHour', 'Напомняне за вечерен преглед след (час)', 12, 23)}
@@ -1591,6 +1641,13 @@ const actions = {
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  },
+  'install': async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => {});
+    installPrompt = null;
+    render();
   },
   'import': () => document.getElementById('import-file').click(),
 };

@@ -420,3 +420,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb
 .emojis label { margin: 0; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
 .emojis input { display: none; }
 .emojis label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+
+.card.install { border-color: var(--accent); background: linear-gradient(135deg, rgba(45, 212, 191, .10), rgba(56, 189, 248, .08)), var(--card); }
+.card.install ol { padding-left: 20px; margin: 8px 0 4px; }
+.card.install li { margin: 4px 0; }
