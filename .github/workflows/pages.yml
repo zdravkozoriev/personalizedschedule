@@ -2,7 +2,7 @@ name: Публикуване в GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/sweet-hypatia-szyr3p']
   workflow_dispatch:
 
 permissions:

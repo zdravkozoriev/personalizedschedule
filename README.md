@@ -25,7 +25,7 @@
 ## Публикуване (еднократно)
 
 1. В GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-2. Слей промените в клон `main`. Работният процес `.github/workflows/pages.yml` публикува приложението на `https://<потребител>.github.io/personalizedschedule/`.
+2. Всяко качване в основния клон публикува приложението чрез `.github/workflows/pages.yml` на `https://zdravkozoriev.github.io/personalizedschedule/`. Ръчно: **Actions → Публикуване в GitHub Pages → Run workflow**.
 
 > GitHub Pages за **частни** хранилища изисква платен план (GitHub Pro). Ако хранилището е частно и нямаш Pro, направи го публично. Данните ти не са в хранилището, а само на телефона, така че кодът може спокойно да е публичен.
 
