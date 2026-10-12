@@ -382,3 +382,17 @@ summary { font-weight: 600; color: var(--accent); padding: 8px 0; cursor: pointe
 .swatches input { display: none; }
 .swatches label:has(input:checked) { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--sw); }
 .swatches label:has(input:checked)::after { content: "✓"; color: #fff; font-weight: 700; }
+
+/* Subtasks */
+.block .bb { min-width: 0; flex: 1; }
+.bsubs { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.bsub { display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 20px; text-align: left; color: var(--text); min-width: 0; }
+.bsub i {
+  flex: none; width: 14px; height: 14px; border-radius: 4px;
+  border: 1.5px solid var(--c); font-style: normal; font-size: 10px; line-height: 11px;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff;
+}
+.bsub.on i { background: var(--c); }
+.bsub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bsub.on span { text-decoration: line-through; color: var(--muted); }
+.subdot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--muted); }

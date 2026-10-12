@@ -106,6 +106,14 @@ function applySectionStyles() {
     `.sec-${x.id}{--c:${x.color};--cs:color-mix(in srgb, ${x.color} 18%, var(--card))}`).join('\n');
 }
 
+// Подзадачите се описват в задачата, а отметките им се пазят за всяко изпълнение в графика.
+const subsOf = t => t.subtasks || [];
+function subProgress(e) {
+  const subs = subsOf(taskOf(e));
+  return { done: subs.filter(x => e.subDone?.[x.id]).length, total: subs.length };
+}
+const subBadge = e => { const p = subProgress(e); return p.total ? `<span>☑ ${p.done}/${p.total}</span>` : ''; };
+
 const mapsUrl = place => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
 const knownLocations = () => [...new Set(state.tasks.filter(t => !t.archived && t.location).map(t => t.location))].sort((a, b) => a.localeCompare(b, 'bg'));
 const locationDatalist = () => `<datalist id="loc-list">${knownLocations().map(l => `<option value="${esc(l)}">`).join('')}</datalist>`;
@@ -282,6 +290,7 @@ function entryItem(e, opts = {}) {
           ${opts.showDate ? `<span>${fmtShort(e.date)}</span>` : ''}
           ${e.start ? `<span>${e.start}</span>` : ''}
           <span>${fmtDur(e.duration)}</span>
+          ${subBadge(e)}
           ${isRecurring(t) ? '<span>↻</span>' : ''}
           ${t.priority === 'high' ? '<span class="tag plain">!</span>' : ''}
           ${t.location ? `<span>📍 ${esc(t.location)}</span>` : ''}
@@ -364,6 +373,19 @@ function layoutLanes(timed) {
   return items;
 }
 
+// Подзадачите, които се побират във височината на блока в графика.
+function blockSubs(e, t, h) {
+  const subs = subsOf(t);
+  if (!subs.length || h < 60) return '';
+  const fit = Math.floor((h - 44) / 22);
+  if (fit < 1) return '';
+  const shown = subs.length > fit ? subs.slice(0, fit - 1) : subs;
+  return `<div class="bsubs">${shown.map(x => `
+    <button class="bsub ${e.subDone?.[x.id] ? 'on' : ''}" data-action="sub-toggle" data-entry="${e.id}" data-sub="${x.id}">
+      <i>${e.subDone?.[x.id] ? '✓' : ''}</i><span>${esc(x.text)}</span></button>`).join('')}
+    ${shown.length < subs.length ? `<div class="bs">+ още ${subs.length - shown.length}</div>` : ''}</div>`;
+}
+
 function timeline(k, timed) {
   const s = state.settings;
   const startMin = Math.min(s.dayStart * 60, ...timed.map(e => toMin(e.start)));
@@ -388,7 +410,7 @@ function timeline(k, timed) {
       <div class="block ${catCls(t)} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}"
            style="top:${y(it.s)}px;height:${h}px;left:${left};width:${width}">
         <button class="check ${e.done ? 'on' : ''}" data-action="toggle-done" data-id="${e.id}">${e.done ? '✓' : ''}</button>
-        <div><div class="bt">${esc(t.title)}</div>${h >= 40 ? `<div class="bs">${e.start}–${fromMin(it.end % 1440)}${t.location ? ` · 📍 ${esc(t.location)}` : ''}</div>` : ''}</div>
+        <div class="bb"><div class="bt">${esc(t.title)}</div>${h >= 40 ? `<div class="bs">${e.start}–${fromMin(it.end % 1440)}${t.location ? ` · 📍 ${esc(t.location)}` : ''}${subsOf(t).length ? ` · ☑ ${subProgress(e).done}/${subsOf(t).length}` : ''}</div>` : ''}${blockSubs(e, t, h)}</div>
       </div>`;
   }
   return html + '</div>';
@@ -421,7 +443,7 @@ function viewWeek() {
         ${list.length ? list.map(e => {
           const tk = taskOf(e);
           return `<button class="mini ${catCls(tk)} ${e.done ? 'done' : ''}" data-action="open-entry" data-id="${e.id}">
-            <i class="pip"></i><span class="tm">${e.start || '—'}</span><span class="ttl">${esc(tk.title)}</span></button>`;
+            <i class="pip"></i><span class="tm">${e.start || '—'}</span><span class="ttl">${esc(tk.title)}</span>${subProgress(e).total ? `<span class="small muted">${subProgress(e).done}/${subProgress(e).total}</span>` : ''}</button>`;
         }).join('') : '<div class="muted small">Нищо планирано</div>'}
       </div>`;
   }
@@ -1011,9 +1033,16 @@ function addPickList(q) {
 function sheetAdd() {
   const { date, start } = sheet;
   return `
-    <h2>Добави в ${relDay(date) ? relDay(date).toLowerCase() : fmtShort(date)}</h2>
-    <label>Час (по избор)</label>
-    <input type="time" id="add-time" value="${start || ''}" step="900">
+    <h2>Добави в графика</h2>
+    <div class="row">
+      <div class="grow"><label>Дата</label><input type="date" id="add-date" value="${date}" required></div>
+      <div class="grow"><label>Час (по избор)</label><input type="time" id="add-time" value="${start || ''}" step="900"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="btn small grow" data-action="add-date-set" data-date="${todayKey()}">Днес</button>
+      <button type="button" class="btn small grow" data-action="add-date-set" data-date="${addDays(todayKey(), 1)}">Утре</button>
+      <button type="button" class="btn small grow" data-action="add-date-set" data-date="${addDays(weekStart(todayKey()), 7)}">Следв. Пн</button>
+    </div>
     <label>От списъка със задачи</label>
     <input type="search" id="add-search" placeholder="Търси...">
     <div class="pick-list" id="add-list">${addPickList('')}</div>
@@ -1048,6 +1077,12 @@ function sheetEntry() {
     </div>
     ${t.location ? `<a class="btn small full" style="margin-bottom:8px" href="${mapsUrl(t.location)}" target="_blank" rel="noopener">📍 ${esc(t.location)} · Отвори в Карти</a>` : ''}
     ${t.notes ? `<p class="muted small" style="white-space:pre-wrap">${esc(t.notes)}</p>` : ''}
+    ${subsOf(t).length ? `
+      <h3 style="margin-top:4px">Подзадачи (${subProgress(e).done}/${subsOf(t).length})</h3>
+      <div class="checklist" style="margin-bottom:10px">${subsOf(t).map(x => `
+        <button class="ci ${e.subDone?.[x.id] ? 'done' : ''}" style="width:100%;text-align:left" data-action="sub-toggle" data-entry="${e.id}" data-sub="${x.id}">
+          <span class="check ${e.subDone?.[x.id] ? 'on' : ''}">${e.subDone?.[x.id] ? '✓' : ''}</span><span>${esc(x.text)}</span>
+        </button>`).join('')}</div>` : ''}
     <button class="btn ${e.done ? '' : 'primary'} full" data-action="toggle-done" data-id="${e.id}">${e.done ? 'Отбележи като несвършена' : '✓ Свърших'}</button>
     <form id="entry-form">
       <div class="row">
@@ -1114,6 +1149,20 @@ function sheetTask() {
         <label>Обичаен час (по избор, слага я директно в графика)</label>
         <input type="time" name="defaultTime" value="${v.defaultTime || ''}" step="900">
       </div>
+      <label>Подзадачи</label>
+      <div id="sub-list">${subsOf(v).map(subRow).join('')}</div>
+      <div class="row" style="margin-top:4px">
+        <input id="new-sub" class="grow" placeholder="Нова подзадача..." autocomplete="off" enterkeyhint="enter">
+        <button type="button" class="btn" data-action="sub-add" aria-label="Добави подзадача">+</button>
+      </div>
+      ${t ? '' : `
+      <div id="r-plan" ${r.type === 'none' ? '' : 'hidden'}>
+        <label>Сложи в графика (по избор)</label>
+        <div class="row">
+          <input type="date" name="planDate" class="grow">
+          <input type="time" name="planTime" class="grow" step="900">
+        </div>
+      </div>`}
       <label>Бележки</label>
       <textarea name="notes">${esc(v.notes || '')}</textarea>
       <div class="actions">
@@ -1240,11 +1289,25 @@ const actions = {
   },
   'add-pick': el => {
     const t = taskById(el.dataset.id);
-    const time = document.getElementById('add-time')?.value || null;
-    addEntry(t, sheet.date, time);
+    const { date, time } = addSheetWhen();
+    addEntry(t, date, time);
     save(); closeSheet(); render();
-    toast(`„${t.title}“ е добавена`);
+    toast(`„${t.title}“ е добавена за ${relDay(date).toLowerCase() || fmtShort(date)}`);
   },
+  'add-date-set': el => { document.getElementById('add-date').value = el.dataset.date; },
+  'sub-toggle': el => {
+    const e = entryById(el.dataset.entry);
+    if (!e) return;
+    e.subDone = e.subDone || {};
+    e.subDone[el.dataset.sub] = !e.subDone[el.dataset.sub];
+    const p = subProgress(e);
+    if (p.done === p.total && !e.done) { setDone(e, true); toast('Всички подзадачи са готови ✓'); }
+    else if (p.done < p.total && e.done) setDone(e, false);
+    save(); render();
+    if (sheet?.type === 'entry') renderSheet();
+  },
+  'sub-add': () => addSubRow(),
+  'sub-remove': el => el.closest('.ci').remove(),
   'open-entry': el => openSheet({ type: 'entry', id: el.dataset.id }),
   'toggle-done': el => {
     const e = entryById(el.dataset.id);
@@ -1454,6 +1517,8 @@ document.addEventListener('change', ev => {
       document.getElementById('r-weekly').hidden = el.value !== 'weekly';
       document.getElementById('r-monthly').hidden = el.value !== 'monthly';
       document.getElementById('r-time').hidden = el.value === 'none';
+      const plan = document.getElementById('r-plan');
+      if (plan) plan.hidden = el.value !== 'none';
       return;
     }
     case 'section-pick': {
@@ -1520,6 +1585,13 @@ document.addEventListener('input', ev => {
   }
 });
 
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' && ev.target.id === 'new-sub') {
+    ev.preventDefault();
+    addSubRow();
+  }
+});
+
 document.addEventListener('submit', ev => {
   ev.preventDefault();
   const form = ev.target;
@@ -1528,9 +1600,10 @@ document.addEventListener('submit', ev => {
     const title = String(f.get('title')).trim();
     if (!title) return;
     const t = newTask({ title, category: f.get('category') || 'work', sectionId: f.get('sectionId') || null, duration: Number(f.get('duration')), location: String(f.get('location') || '').trim() });
-    addEntry(t, sheet.date, document.getElementById('add-time').value || null);
+    const { date, time } = addSheetWhen();
+    addEntry(t, date, time);
     save(); closeSheet(); render();
-    toast(`„${title}“ е добавена`);
+    toast(`„${title}“ е добавена за ${relDay(date).toLowerCase() || fmtShort(date)}`);
   } else if (form.id === 'section-form') {
     const name = String(f.get('name')).trim();
     if (!name) return;
@@ -1567,6 +1640,30 @@ document.addEventListener('submit', ev => {
   }
 });
 
+function addSheetWhen() {
+  return {
+    date: document.getElementById('add-date')?.value || sheet.date,
+    time: document.getElementById('add-time')?.value || null,
+  };
+}
+
+const subRow = (x = { id: '', text: '' }) => `
+  <div class="ci">
+    <i class="subdot"></i>
+    <input class="ci-text" name="sub" value="${esc(x.text)}" autocomplete="off">
+    <input type="hidden" name="subid" value="${x.id}">
+    <button type="button" class="iconbtn x" data-action="sub-remove" aria-label="Изтрий">×</button>
+  </div>`;
+
+function addSubRow() {
+  const input = document.getElementById('new-sub');
+  const text = input.value.trim();
+  if (!text) return;
+  document.getElementById('sub-list').insertAdjacentHTML('beforeend', subRow({ id: '', text }));
+  input.value = '';
+  input.focus();
+}
+
 function newTask(fields) {
   const t = {
     id: uid(), title: '', category: 'work', duration: 30, priority: 'normal',
@@ -1575,6 +1672,17 @@ function newTask(fields) {
   };
   state.tasks.push(t);
   return t;
+}
+
+function readSubtasks(f) {
+  const ids = f.getAll('subid');
+  const subs = f.getAll('sub')
+    .map((text, i) => ({ id: ids[i] || uid(), text: String(text).trim() }))
+    .filter(x => x.text);
+  // Написана, но недобавена подзадача също се запазва.
+  const pending = document.getElementById('new-sub')?.value.trim();
+  if (pending) subs.push({ id: uid(), text: pending });
+  return subs;
 }
 
 function saveTaskForm(f) {
@@ -1597,6 +1705,7 @@ function saveTaskForm(f) {
     defaultTime: rtype === 'none' ? '' : (f.get('defaultTime') || ''),
     notes: String(f.get('notes') || ''),
     location: String(f.get('location') || '').trim(),
+    subtasks: readSubtasks(f),
   };
   const existing = sheet.id ? taskById(sheet.id) : null;
   if (existing) {
@@ -1613,8 +1722,11 @@ function saveTaskForm(f) {
     }
     toast('Запазено');
   } else {
-    newTask({ ...fields, startDate: todayKey() });
-    toast(isRecurring(fields) ? 'Повтарящата се задача ще влиза в графика сама' : 'Задачата е добавена в списъка');
+    const t = newTask({ ...fields, startDate: todayKey() });
+    const planDate = !isRecurring(fields) && f.get('planDate');
+    if (planDate) addEntry(t, planDate, f.get('planTime') || null);
+    toast(isRecurring(fields) ? 'Повтарящата се задача ще влиза в графика сама'
+      : planDate ? `Добавена в графика за ${relDay(planDate).toLowerCase() || fmtShort(planDate)}` : 'Задачата е добавена в списъка');
   }
   save(); closeSheet(); render();
 }
