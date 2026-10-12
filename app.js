@@ -4,7 +4,7 @@
 import { parseCommand, matchScore } from './voice.js';
 
 const STORAGE_KEY = 'ps-data-v1';
-const APP_VERSION = '1.5 · 12.10.2026';
+const APP_VERSION = '1.6 · 12.10.2026';
 const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const DAY_LONG = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
 const MONTHS = ['януари', 'февруари', 'март', 'април', 'май', 'юни', 'юли', 'август', 'септември', 'октомври', 'ноември', 'декември'];
@@ -62,6 +62,7 @@ function defaultState() {
     dayNotes: {},
     notes: [],
     sections: [],
+    groups: [],
     lastEveningReview: null,
     settings: { dayStart: 6, dayEnd: 23, capacityHours: 8, reviewHour: 19 },
   };
@@ -95,6 +96,8 @@ const taskById = id => state.tasks.find(t => t.id === id);
 const entryById = id => state.entries.find(e => e.id === id);
 const taskOf = e => taskById(e.taskId) || { title: '(изтрита задача)', category: 'personal', recurrence: { type: 'none' } };
 const isRecurring = t => t.recurrence && t.recurrence.type !== 'none';
+const groupById = id => id ? (state.groups || []).find(g => g.id === id) : null;
+const GROUP_EMOJIS = ['📁', '💼', '🏠', '🛒', '📞', '✉️', '💪', '🧘', '📚', '💡', '🎯', '💰', '🚗', '👶', '❤️', '✈️', '🎨', '🧹', '🍳', '🩺', '🌱', '🐾', '🎁', '⚙️'];
 const sectionById = id => id ? state.sections.find(x => x.id === id) : null;
 const catCls = t => `cat-${t.category}${sectionById(t.sectionId) ? ' sec-' + t.sectionId : ''}`;
 const SECTION_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#ea580c', '#d97706', '#ca8a04', '#0d9488', '#0891b2', '#7c3aed', '#c026d3', '#db2777', '#64748b'];
@@ -223,6 +226,8 @@ const ui = {
   month: todayKey().slice(0, 7),
   libCat: 'all',
   libSection: 'all',
+  libView: 'list',
+  libGroup: null,
   libSearch: '',
   showDone: false,
   scrolledFor: null,
@@ -510,6 +515,7 @@ function libraryRow(t) {
           ${isRecurring(t) ? `<span>↻ ${recurLabel(t.recurrence)}${t.defaultTime ? ' · ' + t.defaultTime : ''}</span>` : ''}
           ${up ? `<span>📅 ${fmtShort(up.date)}${up.start ? ' ' + up.start : ''}</span>` : ''}
           ${t.priority === 'high' ? '<span class="tag plain">Висок приоритет</span>' : ''}
+          ${groupById(t.groupId) && !(ui.libView === 'groups' && ui.libGroup) ? `<span>${groupById(t.groupId).emoji} ${esc(groupById(t.groupId).name)}</span>` : ''}
           ${t.location ? `<span>📍 ${esc(t.location)}</span>` : ''}
         </div>
       </div>
@@ -517,15 +523,17 @@ function libraryRow(t) {
     </div>`;
 }
 
-function viewTasks() {
+const prioOrder = { high: 0, normal: 1, low: 2 };
+const sortTasks = list => list.slice().sort((a, b) =>
+  (prioOrder[a.priority] ?? 1) - (prioOrder[b.priority] ?? 1) || a.title.localeCompare(b.title, 'bg'));
+const searchMatch = t => {
   const q = ui.libSearch.trim().toLowerCase();
-  const prio = { high: 0, normal: 1, low: 2 };
-  const visible = state.tasks
-    .filter(t => !t.archived)
-    .filter(t => ui.libCat === 'all' || t.category === ui.libCat)
-    .filter(t => ui.libSection === 'all' || (ui.libSection === 'none' ? !sectionById(t.sectionId) : t.sectionId === ui.libSection))
-    .filter(t => !q || t.title.toLowerCase().includes(q) || (t.location || '').toLowerCase().includes(q))
-    .sort((a, b) => (prio[a.priority] ?? 1) - (prio[b.priority] ?? 1) || a.title.localeCompare(b.title, 'bg'));
+  return !q || t.title.toLowerCase().includes(q) || (t.location || '').toLowerCase().includes(q);
+};
+
+// Задачите, подредени по състояние: за планиране, повтарящи се, планирани, завършени.
+function taskStatusLists(tasks) {
+  const visible = sortTasks(tasks);
   const recurring = visible.filter(isRecurring);
   const open = visible.filter(t => !isRecurring(t) && !t.done);
   const unplanned = open.filter(t => !upcomingEntry(t));
@@ -533,20 +541,75 @@ function viewTasks() {
   const done = visible.filter(t => !isRecurring(t) && t.done);
   const section = (title, list) => list.length
     ? `<h3>${title} (${list.length})</h3><div class="stack">${list.map(libraryRow).join('')}</div>` : '';
+  return `
+    ${section('Чакат да бъдат планирани', unplanned)}
+    ${section('Повтарящи се', recurring)}
+    ${section('Планирани', planned)}
+    ${done.length ? `<button class="btn small full" style="margin-top:16px" data-action="toggle-show-done">${ui.showDone ? 'Скрий' : 'Покажи'} завършените (${done.length})</button>` : ''}
+    ${ui.showDone ? section('Завършени', done) : ''}`;
+}
 
+const libViewSwitch = () => `
+  <div class="seg" style="margin-bottom:12px">
+    <button class="${ui.libView === 'list' ? 'on' : ''}" data-action="lib-view" data-view="list">Всички задачи</button>
+    <button class="${ui.libView === 'groups' ? 'on' : ''}" data-action="lib-view" data-view="groups">Категории</button>
+  </div>`;
+
+function viewTasks() {
+  if (ui.libView === 'groups') return ui.libGroup ? viewGroup() : viewGroups();
+  const visible = state.tasks
+    .filter(t => !t.archived)
+    .filter(t => ui.libCat === 'all' || t.category === ui.libCat)
+    .filter(t => ui.libSection === 'all' || (ui.libSection === 'none' ? !sectionById(t.sectionId) : t.sectionId === ui.libSection))
+    .filter(searchMatch);
   return `
     <h1>Задачи</h1>
+    ${libViewSwitch()}
     <input class="search" type="search" id="lib-search" placeholder="Търси по име или място..." value="${esc(ui.libSearch)}">
     <div class="seg" style="margin-bottom:8px">
       ${['all', 'work', 'personal'].map(c => `<button class="${ui.libCat === c ? 'on' : ''}" data-action="lib-cat" data-cat="${c}">${c === 'all' ? 'Всички' : CATS[c]}</button>`).join('')}
     </div>
     ${sectionChips()}
     ${!state.tasks.length ? `<div class="empty">Тук ще са всички твои задачи.<br>Добави първата с бутона +.<br><br>Повтарящите се (всеки ден, всеки понеделник...) влизат в графика сами.</div>` : ''}
-    ${section('Чакат да бъдат планирани', unplanned)}
-    ${section('Повтарящи се', recurring)}
-    ${section('Планирани', planned)}
-    ${done.length ? `<button class="btn small full" style="margin-top:16px" data-action="toggle-show-done">${ui.showDone ? 'Скрий' : 'Покажи'} завършените (${done.length})</button>` : ''}
-    ${ui.showDone ? section('Завършени', done) : ''}
+    ${taskStatusLists(visible)}
+    <button class="fab" data-action="new-task">+</button>`;
+}
+
+const liveTasks = () => state.tasks.filter(t => !t.archived && !(t.done && !isRecurring(t)));
+
+function viewGroups() {
+  const live = liveTasks();
+  const card = (id, emoji, name, list) => `
+    <button class="gcard" data-action="open-group" data-id="${id}">
+      <span class="gemoji">${emoji}</span>
+      <b>${name}</b>
+      <span class="muted small">${list.length} ${list.length === 1 ? 'задача' : 'задачи'}</span>
+      <span class="gdots">${[...new Set(list.map(t => sectionById(t.sectionId)?.color).filter(Boolean))].slice(0, 5).map(c => `<i style="background:${c}"></i>`).join('')}</span>
+    </button>`;
+  const ungrouped = live.filter(t => !groupById(t.groupId));
+  return `
+    <h1>Задачи</h1>
+    ${libViewSwitch()}
+    <div class="ggrid">
+      ${(state.groups || []).map(g => card(g.id, g.emoji, esc(g.name), live.filter(t => t.groupId === g.id))).join('')}
+      ${ungrouped.length ? card('none', '🗂️', 'Без категория', ungrouped) : ''}
+      <button class="gcard add" data-action="new-group"><span class="gemoji">＋</span><b>Нова категория</b><span class="muted small">напр. Обаждания, Покупки</span></button>
+    </div>
+    ${!(state.groups || []).length ? '<p class="muted small" style="margin-top:12px">Категориите групират задачите по вид, например „Обаждания“, „Имейли“, „Покупки“. Разделите пък им дават цвят в графика.</p>' : ''}`;
+}
+
+function viewGroup() {
+  const g = groupById(ui.libGroup);
+  if (!g && ui.libGroup !== 'none') { ui.libGroup = null; return viewGroups(); }
+  const tasks = state.tasks.filter(t => !t.archived && (g ? t.groupId === g.id : !groupById(t.groupId))).filter(searchMatch);
+  return `
+    <button class="backlink" data-action="group-back">‹ Категории</button>
+    <div class="row" style="margin:4px 0 12px">
+      <h1 class="grow" style="margin:0">${g ? `${g.emoji} ${esc(g.name)}` : '🗂️ Без категория'}</h1>
+      ${g ? `<button class="btn small" data-action="edit-group" data-id="${g.id}">Редактирай</button>` : ''}
+    </div>
+    <input class="search" type="search" id="lib-search" placeholder="Търси в категорията..." value="${esc(ui.libSearch)}">
+    ${tasks.length ? taskStatusLists(tasks) : '<div class="empty">Няма задачи в тази категория.<br>Добави с бутона +.</div>'}
     <button class="fab" data-action="new-task">+</button>`;
 }
 
@@ -987,7 +1050,7 @@ function closeSheet() {
 
 function renderSheet() {
   if (!sheet) return closeSheet();
-  const body = { add: sheetAdd, entry: sheetEntry, task: sheetTask, schedule: sheetSchedule, note: sheetNote, voice: sheetVoice, section: sheetSection }[sheet.type]();
+  const body = { add: sheetAdd, entry: sheetEntry, task: sheetTask, schedule: sheetSchedule, note: sheetNote, voice: sheetVoice, section: sheetSection, group: sheetGroup }[sheet.type]();
   // При повторно рисуване на същия панел пазим позицията на скрола и не анимираме.
   const old = $sheet.querySelector('.sheet');
   const same = old && $sheet.dataset.key === `${sheet.type}:${sheet.id || ''}`;
@@ -1011,6 +1074,14 @@ const sectionSelect = value => state.sections.length ? `
 
 // Раздел, избран в библиотеката, се предлага по подразбиране за нови задачи.
 const defaultSection = () => sectionById(ui.libSection) || null;
+const defaultGroup = () => (ui.tab === 'tasks' && ui.libView === 'groups' && groupById(ui.libGroup)) || null;
+
+const groupSelect = value => (state.groups || []).length ? `
+  <label>Категория</label>
+  <select name="groupId">
+    <option value="">— Без категория —</option>
+    ${state.groups.map(g => `<option value="${g.id}" ${value === g.id ? 'selected' : ''}>${g.emoji} ${esc(g.name)}</option>`).join('')}
+  </select>` : '';
 
 const catRadios = value =>
   `<div class="seg">${Object.entries(CATS).map(([k, l]) => `<label><input type="radio" name="category" value="${k}" ${value === k ? 'checked' : ''}>${l}</label>`).join('')}</div>`;
@@ -1053,8 +1124,9 @@ function sheetAdd() {
       <form id="quick-form">
         <label>Заглавие</label>
         <input name="title" required autocomplete="off">
+        ${groupSelect(defaultGroup()?.id)}
         ${sectionSelect(defaultSection()?.id)}
-        <label>Категория</label>
+        <label>Тип</label>
         ${catRadios(defaultSection()?.category || 'work')}
         <div class="row">
           <div class="grow"><label>Продължителност</label>${durationSelect('duration', 30)}</div>
@@ -1116,7 +1188,7 @@ function sheetEntry() {
 function sheetTask() {
   const t = sheet.id ? taskById(sheet.id) : null;
   const ds = defaultSection();
-  const v = t || { title: '', category: ds?.category || 'work', sectionId: ds?.id || null, duration: 30, priority: 'normal', recurrence: { type: 'none', days: [], dayOfMonth: 1 }, defaultTime: '', notes: '', location: '' };
+  const v = t || { title: '', category: ds?.category || 'work', sectionId: ds?.id || null, groupId: defaultGroup()?.id || null, duration: 30, priority: 'normal', recurrence: { type: 'none', days: [], dayOfMonth: 1 }, defaultTime: '', notes: '', location: '' };
   const r = v.recurrence || { type: 'none' };
   const rtypes = { none: 'Еднократна', daily: 'Всеки ден', weekdays: 'Делнични дни (Пн–Пт)', weekly: 'В определени дни от седмицата', monthly: 'Веднъж месечно' };
   return `
@@ -1124,8 +1196,9 @@ function sheetTask() {
     <form id="task-form">
       <label>Заглавие</label>
       <input name="title" required autocomplete="off" value="${esc(v.title)}" ${t ? '' : 'autofocus'}>
+      ${groupSelect(v.groupId)}
       ${sectionSelect(v.sectionId)}
-      <label>Категория</label>
+      <label>Тип</label>
       ${catRadios(v.category)}
       <div class="row">
         <div class="grow"><label>Продължителност</label>${durationSelect('duration', v.duration)}</div>
@@ -1190,6 +1263,24 @@ function sheetSchedule() {
       <label>Час (по избор)</label>
       <input type="time" name="start" value="${t.defaultTime || ''}" step="900">
       <button class="btn primary full" style="margin-top:14px" type="submit">Сложи в графика</button>
+    </form>`;
+}
+
+function sheetGroup() {
+  const g = groupById(sheet.id);
+  const v = g || { name: '', emoji: '📁' };
+  return `
+    <h2>${g ? 'Редактирай категория' : 'Нова категория'}</h2>
+    <form id="group-form">
+      <label>Име</label>
+      <input name="name" required autocomplete="off" placeholder="напр. Обаждания, Покупки, Проекти" value="${esc(v.name)}" ${g ? '' : 'autofocus'}>
+      <label>Икона</label>
+      <div class="emojis">${GROUP_EMOJIS.map(e => `<label><input type="radio" name="emoji" value="${e}" ${v.emoji === e ? 'checked' : ''}>${e}</label>`).join('')}</div>
+      <div class="actions">
+        ${g ? `<button type="button" class="btn danger" data-action="delete-group" data-id="${g.id}">Изтрий</button>` : ''}
+        <button type="submit" class="btn primary">Запази</button>
+      </div>
+      ${g ? '<p class="muted small">Ако изтриеш категорията, задачите в нея остават, но без категория.</p>' : ''}
     </form>`;
 }
 
@@ -1374,6 +1465,19 @@ const actions = {
   },
   'new-task': () => openSheet({ type: 'task', id: null }),
   'lib-section': el => { ui.libSection = el.dataset.id; render(); },
+  'lib-view': el => { ui.libView = el.dataset.view; ui.libGroup = null; ui.libSearch = ''; render(); },
+  'open-group': el => { ui.libGroup = el.dataset.id; ui.libSearch = ''; render(); window.scrollTo({ top: 0 }); },
+  'group-back': () => { ui.libGroup = null; ui.libSearch = ''; render(); },
+  'new-group': () => openSheet({ type: 'group', id: null }),
+  'edit-group': el => openSheet({ type: 'group', id: el.dataset.id }),
+  'delete-group': el => {
+    const g = groupById(el.dataset.id);
+    if (!confirm(`Да изтрия ли категорията „${g.name}“? Задачите в нея остават.`)) return;
+    state.groups = state.groups.filter(x => x !== g);
+    state.tasks.forEach(t => { if (t.groupId === g.id) t.groupId = null; });
+    ui.libGroup = null;
+    save(); closeSheet(); render();
+  },
   'new-section': () => openSheet({ type: 'section', id: null }),
   'edit-section': el => openSheet({ type: 'section', id: el.dataset.id }),
   'delete-section': el => {
@@ -1601,11 +1705,21 @@ document.addEventListener('submit', ev => {
   if (form.id === 'quick-form') {
     const title = String(f.get('title')).trim();
     if (!title) return;
-    const t = newTask({ title, category: f.get('category') || 'work', sectionId: f.get('sectionId') || null, duration: Number(f.get('duration')), location: String(f.get('location') || '').trim() });
+    const t = newTask({ title, category: f.get('category') || 'work', sectionId: f.get('sectionId') || null, groupId: f.get('groupId') || null, duration: Number(f.get('duration')), location: String(f.get('location') || '').trim() });
     const { date, time } = addSheetWhen();
     addEntry(t, date, time);
     save(); closeSheet(); render();
     toast(`„${title}“ е добавена за ${relDay(date).toLowerCase() || fmtShort(date)}`);
+  } else if (form.id === 'group-form') {
+    const name = String(f.get('name')).trim();
+    if (!name) return;
+    const fields = { name, emoji: f.get('emoji') || '📁' };
+    state.groups = state.groups || [];
+    const g = groupById(sheet.id);
+    if (g) Object.assign(g, fields);
+    else state.groups.push({ id: uid(), ...fields });
+    save(); closeSheet(); render();
+    toast(g ? 'Категорията е запазена' : `Категория „${name}“ е създадена`);
   } else if (form.id === 'section-form') {
     const name = String(f.get('name')).trim();
     if (!name) return;
@@ -1701,6 +1815,7 @@ function saveTaskForm(f) {
     title,
     category: f.get('category') || 'work',
     sectionId: f.get('sectionId') || null,
+    groupId: f.get('groupId') || null,
     duration: Number(f.get('duration')),
     priority: f.get('priority'),
     recurrence,

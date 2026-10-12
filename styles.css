@@ -1,41 +1,28 @@
+/* Палитра „Deep Ocean“ */
 :root {
-  --bg: #f6f6fb;
-  --card: #ffffff;
-  --text: #1c1b29;
-  --muted: #6b6a7d;
-  --line: #e4e3ee;
-  --accent: #4f46e5;
-  --accent-soft: #eceafe;
-  --work: #2563eb;
-  --work-soft: #e3ecfe;
-  --personal: #16a34a;
-  --personal-soft: #e2f6e8;
-  --danger: #dc2626;
-  --warn: #d97706;
-  --warn-soft: #fdf1dc;
-  --now: #ef4444;
-  --radius: 14px;
+  --bg: #081820;
+  --card: #122B35;
+  --raised: #183844;
+  --text: #E6F7FA;
+  --muted: #8DB0BA;
+  --line: #1F404C;
+  --accent: #2DD4BF;
+  --on-accent: #04211D;
+  --accent-soft: rgba(45, 212, 191, .14);
+  --sky: #38BDF8;
+  --work: #38BDF8;
+  --work-soft: rgba(56, 189, 248, .16);
+  --personal: #2DD4BF;
+  --personal-soft: rgba(45, 212, 191, .16);
+  --danger: #F87171;
+  --warn: #FBBF24;
+  --warn-soft: rgba(251, 191, 36, .14);
+  --now: #F87171;
+  --radius: 16px;
   --nav-h: 64px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12121a;
-    --card: #1d1d28;
-    --text: #ececf4;
-    --muted: #9b9ab0;
-    --line: #2e2e3d;
-    --accent: #8b85ff;
-    --accent-soft: #2a2850;
-    --work: #6aa0ff;
-    --work-soft: #1e2b47;
-    --personal: #4ade80;
-    --personal-soft: #173323;
-    --warn-soft: #3a2c12;
-  }
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -82,7 +69,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px
   background: var(--accent-soft); color: var(--accent);
   font-weight: 600;
 }
-.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
 .btn.danger { background: transparent; color: var(--danger); }
 .btn.small { min-height: 34px; padding: 0 12px; font-size: 14px; border-radius: 10px; }
 .btn.full { width: 100%; }
@@ -124,9 +111,9 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px
   right: max(16px, calc(50% - 304px));
   bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
   width: 58px; height: 58px; border-radius: 50%;
-  background: var(--accent); color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--sky)); color: var(--on-accent);
   font-size: 32px; line-height: 1;
-  box-shadow: 0 6px 18px rgba(79, 70, 229, .35);
+  box-shadow: 0 6px 20px rgba(45, 212, 191, .30);
   z-index: 15;
 }
 
@@ -194,7 +181,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px
   width: 28px; height: 28px; border-radius: 50%;
   border: 2px solid var(--c, var(--muted));
   display: inline-flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 15px;
+  color: var(--on-accent); font-size: 15px;
 }
 .check.on { background: var(--c, var(--accent)); }
 
@@ -256,7 +243,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px
 .mcell .bar { width: 80%; height: 4px; }
 
 /* Segmented control */
-.seg { display: flex; background: var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg { display: flex; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
 .seg label, .seg button {
   flex: 1; margin: 0; text-align: center;
   padding: 8px 4px; border-radius: 8px;
@@ -264,17 +251,17 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px
   cursor: pointer;
 }
 .seg input { display: none; }
-.seg label:has(input:checked), .seg button.on { background: var(--card); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.seg label:has(input:checked), .seg button.on { background: var(--raised); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 
 .days { display: flex; gap: 4px; }
 .days label { flex: 1; margin: 0; text-align: center; padding: 8px 0; border-radius: 8px; background: var(--line); color: var(--text); font-size: 13px; cursor: pointer; }
 .days input { display: none; }
-.days label:has(input:checked) { background: var(--accent); color: #fff; }
+.days label:has(input:checked) { background: var(--accent); color: var(--on-accent); }
 
 /* Sheet */
 .backdrop {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(10, 10, 20, .45);
+  background: rgba(2, 10, 14, .65);
   display: flex; align-items: flex-end; justify-content: center;
   animation: fade .15s ease-out;
 }
@@ -325,7 +312,7 @@ summary { font-weight: 600; color: var(--accent); padding: 8px 0; cursor: pointe
   margin-right: 5px;
   background: var(--card); color: var(--accent);
   border: 1px solid var(--line);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
   display: flex; align-items: center; justify-content: center;
   z-index: 15;
 }
@@ -333,7 +320,7 @@ summary { font-weight: 600; color: var(--accent); padding: 8px 0; cursor: pointe
 .voice-box { text-align: center; margin: 6px 0 12px; }
 .mic-big {
   width: 84px; height: 84px; border-radius: 50%;
-  background: var(--accent); color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--sky)); color: var(--on-accent);
   display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 18px rgba(79, 70, 229, .35);
 }
@@ -390,9 +377,46 @@ summary { font-weight: 600; color: var(--accent); padding: 8px 0; cursor: pointe
 .bsub i {
   flex: none; width: 14px; height: 14px; border-radius: 4px;
   border: 1.5px solid var(--c); font-style: normal; font-size: 10px; line-height: 11px;
-  display: inline-flex; align-items: center; justify-content: center; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--on-accent);
 }
 .bsub.on i { background: var(--c); }
 .bsub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bsub.on span { text-decoration: line-through; color: var(--muted); }
 .subdot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--muted); }
+
+/* Deep Ocean детайли */
+body { -webkit-font-smoothing: antialiased; }
+h1 { letter-spacing: -.01em; }
+h3 { color: var(--accent); opacity: .85; }
+#tabs { background: rgba(10, 30, 38, .92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.card, .item, .mcell, .chip { border-color: var(--line); }
+.day-card.today, .mcell.today { border-color: var(--accent); }
+.mcell.today { color: var(--accent); }
+.tl-hour span { background: var(--bg); }
+.block { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 25%, transparent); }
+.check { color: var(--on-accent); }
+.toast, #toast { background: var(--text); color: var(--bg); }
+input, select, textarea { background: var(--bg); border-color: var(--line); }
+input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 0; border-color: transparent; }
+.sheet { background: var(--card); border-top: 1px solid var(--line); }
+.banner { background: var(--accent-soft); color: var(--accent); }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.mic-big.on { background: var(--now); color: #fff; }
+
+/* Категории */
+.ggrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.gcard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px; text-align: left; min-height: 120px;
+}
+.gcard b { font-size: 16px; }
+.gcard.add { border-style: dashed; color: var(--accent); background: transparent; }
+.gemoji { font-size: 28px; line-height: 1.2; }
+.gdots { display: flex; gap: 4px; margin-top: auto; }
+.gdots i { width: 8px; height: 8px; border-radius: 50%; }
+.backlink { color: var(--accent); font-weight: 600; padding: 8px 0; }
+.emojis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.emojis label { margin: 0; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+.emojis input { display: none; }
+.emojis label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
