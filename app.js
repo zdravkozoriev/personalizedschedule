@@ -4,7 +4,7 @@
 import { parseCommand, matchScore } from './voice.js';
 
 const STORAGE_KEY = 'ps-data-v1';
-const APP_VERSION = '2.0 · 16.10.2026';
+const APP_VERSION = '2.1 · 16.10.2026';
 const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const DAY_LONG = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
 const MONTHS = ['януари', 'февруари', 'март', 'април', 'май', 'юни', 'юли', 'август', 'септември', 'октомври', 'ноември', 'декември'];
@@ -34,13 +34,16 @@ function fmtDur(m) {
   const h = Math.floor(m / 60), r = m % 60;
   return r ? `${h} ч ${r} мин` : `${h} ч`;
 }
-function fmtDate(k) {
+// Всички дати се показват като ден.месец.година.
+function fmtNum(k) {
   const d = fromKey(k);
-  return `${DAY_LONG[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+function fmtDate(k) {
+  return `${DAY_LONG[fromKey(k).getDay()]}, ${fmtNum(k)}`;
 }
 function fmtShort(k) {
-  const d = fromKey(k);
-  return `${DAY_SHORT[d.getDay()]} ${d.getDate()}.${pad(d.getMonth() + 1)}`;
+  return `${DAY_SHORT[fromKey(k).getDay()]} ${fmtNum(k)}`;
 }
 function relDay(k) {
   const t = todayKey();
@@ -508,7 +511,7 @@ function viewWeek() {
     days += `
       <div class="card day-card ${k === t ? 'today' : ''}">
         <header>
-          <button class="name" data-action="open-day" data-date="${k}">${DAY_LONG[fromKey(k).getDay()]}<span>${fromKey(k).getDate()}.${pad(fromKey(k).getMonth() + 1)} · ${fmtDur(total)}${total > cap ? ' ⚠️' : ''}</span></button>
+          <button class="name" data-action="open-day" data-date="${k}">${DAY_LONG[fromKey(k).getDay()]}<span>${fmtNum(k)} · ${fmtDur(total)}${total > cap ? ' ⚠️' : ''}</span></button>
           <button class="btn small" data-action="add" data-date="${k}">+</button>
         </header>
         <div class="bar"><i class="w" style="width:${m.work / scale * 100}%"></i><i class="p" style="width:${m.personal / scale * 100}%"></i></div>
@@ -524,7 +527,7 @@ function viewWeek() {
     ${periodSwitch()}
     <div class="datenav">
       <button class="iconbtn" data-action="week-shift" data-n="-7">‹</button>
-      <div class="title"><b>${d0.getDate()} ${MONTHS[d0.getMonth()]} – ${d1.getDate()} ${MONTHS[d1.getMonth()]}</b><span>${done}/${all.length} готови · ${fmtDur(sum(all, e => e.duration))}</span></div>
+      <div class="title"><b>${fmtNum(wk)} – ${fmtNum(end)}</b><span>${done}/${all.length} готови · ${fmtDur(sum(all, e => e.duration))}</span></div>
       <button class="iconbtn" data-action="week-shift" data-n="7">›</button>
     </div>
     ${wk !== weekStart(t) ? `<button class="btn small full" style="margin-bottom:12px" data-action="week-today">Към тази седмица</button>` : ''}
@@ -1126,13 +1129,73 @@ function settingsCard() {
     </div>`;
 }
 
+// ---------- Избор на дата (седмицата започва от понеделник) ----------
+
+// Поле за дата: скрита стойност YYYY-MM-DD и бутон, който показва ДД.ММ.ГГГГ.
+function dateField(id, value, opts = {}) {
+  return `
+    <input type="hidden" id="${id}" ${opts.name ? `name="${opts.name}"` : ''} value="${value || ''}" ${opts.optional ? 'data-optional="1"' : ''}>
+    <button type="button" class="datefield" data-action="pick-date" data-target="${id}" id="${id}-label">${dateFieldLabel(value)}</button>`;
+}
+const dateFieldLabel = v => v ? `<span>${fmtNum(v)}</span><small>${DAY_SHORT[fromKey(v).getDay()]}</small>` : '<span class="muted">Избери дата</span>';
+
+function setDateField(id, value) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.value = value;
+  document.getElementById(`${id}-label`).innerHTML = dateFieldLabel(value);
+}
+
+let picker = null;
+const $picker = (() => { const el = document.createElement('div'); el.id = 'picker-root'; document.body.appendChild(el); return el; })();
+
+function openDatePicker(target) {
+  const input = document.getElementById(target);
+  const value = input?.value || '';
+  picker = { target, value, optional: !!input?.dataset.optional, month: (value || todayKey()).slice(0, 7) };
+  renderDatePicker();
+}
+function closeDatePicker() { picker = null; $picker.innerHTML = ''; }
+
+function renderDatePicker() {
+  const [y, m] = picker.month.split('-').map(Number);
+  const shift = n => { const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+  const t = todayKey();
+  let k = weekStart(`${picker.month}-01`);
+  let cells = MON_FIRST.map(d => `<div class="dp-dow">${DAY_SHORT[d]}</div>`).join('');
+  for (let i = 0; i < 42; i++) {
+    const d = fromKey(k);
+    if (i >= 35 && d.getMonth() !== m - 1) break;
+    cells += `<button type="button" class="dp-day ${d.getMonth() !== m - 1 ? 'out' : ''} ${k === t ? 'today' : ''} ${k === picker.value ? 'on' : ''}"
+      data-action="dp-pick" data-date="${k}">${d.getDate()}</button>`;
+    k = addDays(k, 1);
+  }
+  $picker.innerHTML = `
+    <div class="dp-backdrop" data-action="dp-close">
+      <div class="dp" data-action="noop">
+        <div class="dp-head">
+          <button type="button" class="iconbtn" data-action="dp-month" data-month="${shift(-1)}">‹</button>
+          <b>${MONTHS_TITLE[m - 1]} ${y}</b>
+          <button type="button" class="iconbtn" data-action="dp-month" data-month="${shift(1)}">›</button>
+        </div>
+        <div class="dp-grid">${cells}</div>
+        <div class="row" style="margin-top:10px">
+          <button type="button" class="btn small grow" data-action="dp-pick" data-date="${t}">Днес</button>
+          <button type="button" class="btn small grow" data-action="dp-pick" data-date="${addDays(t, 1)}">Утре</button>
+          ${picker.optional ? '<button type="button" class="btn small grow" data-action="dp-clear">Без дата</button>' : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
 // ---------- Плъзгащи се панели (sheets) ----------
 
-function openSheet(s) { stopListening(); sheet = s; renderSheet(); }
+function openSheet(s) { stopListening(); closeDatePicker(); sheet = s; renderSheet(); }
 
 function closeSheet() {
   const was = sheet;
   sheet = null;
+  closeDatePicker();
   stopListening();
   $sheet.innerHTML = '';
   if (was?.type === 'note') {
@@ -1204,7 +1267,7 @@ function sheetAdd() {
   return `
     <h2>Добави в графика</h2>
     <div class="row">
-      <div class="grow"><label>Дата</label><input type="date" id="add-date" value="${date}" required></div>
+      <div class="grow"><label>Дата</label>${dateField('add-date', date)}</div>
       <div class="grow"><label>Час (по избор)</label><input type="time" id="add-time" value="${start || ''}" step="900"></div>
     </div>
     <div class="row" style="margin-top:8px">
@@ -1272,7 +1335,7 @@ function sheetEntry() {
       <button class="btn small grow" data-action="entry-shift" data-n="7">След седмица</button>
     </div>
     <div class="row" style="margin-top:8px">
-      <input type="date" id="move-date" class="grow" value="${e.date}">
+      <div class="grow">${dateField('move-date', e.date)}</div>
       <button class="btn small" data-action="entry-move">Премести</button>
     </div>
     <div class="actions">
@@ -1330,7 +1393,7 @@ function sheetTask() {
       <div id="r-plan" ${r.type === 'none' ? '' : 'hidden'}>
         <label>Сложи в графика (по избор)</label>
         <div class="row">
-          <input type="date" name="planDate" class="grow">
+          <div class="grow">${dateField('plan-date', '', { name: 'planDate', optional: true })}</div>
           <input type="time" name="planTime" class="grow" step="900">
         </div>
       </div>`}
@@ -1355,7 +1418,7 @@ function sheetSchedule() {
         <button type="button" data-action="sched-day" data-date="${addDays(tk, 1)}">Утре</button>
         <button type="button" data-action="sched-day" data-date="${addDays(weekStart(tk), 7)}">Следв. Пн</button>
       </div>
-      <input type="date" name="date" value="${sheet.date || tk}" required>
+      ${dateField('sched-date', sheet.date || tk, { name: 'date' })}
       <label>Час (по избор)</label>
       <input type="time" name="start" value="${t.defaultTime || ''}" step="900">
       <button class="btn primary full" style="margin-top:14px" type="submit">Сложи в графика</button>
@@ -1491,7 +1554,7 @@ const actions = {
     save(); closeSheet(); render();
     toast(`„${t.title}“ е добавена за ${relDay(date).toLowerCase() || fmtShort(date)}`);
   },
-  'add-date-set': el => { document.getElementById('add-date').value = el.dataset.date; },
+  'add-date-set': el => setDateField('add-date', el.dataset.date),
   'sub-toggle': el => {
     const e = entryById(el.dataset.entry);
     if (!e) return;
@@ -1692,7 +1755,12 @@ const actions = {
     save(); closeSheet(); render();
   },
   'schedule': el => openSheet({ type: 'schedule', id: el.dataset.id }),
-  'sched-day': el => { document.querySelector('#schedule-form [name=date]').value = el.dataset.date; },
+  'sched-day': el => setDateField('sched-date', el.dataset.date),
+  'pick-date': el => openDatePicker(el.dataset.target),
+  'dp-close': () => closeDatePicker(),
+  'dp-month': el => { picker.month = el.dataset.month; renderDatePicker(); },
+  'dp-pick': el => { setDateField(picker.target, el.dataset.date); closeDatePicker(); },
+  'dp-clear': () => { setDateField(picker.target, ''); closeDatePicker(); },
   'lib-cat': el => { ui.libCat = el.dataset.cat; render(); },
   'toggle-show-done': () => { ui.showDone = !ui.showDone; render(); },
   'export': () => {
