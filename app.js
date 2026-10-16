@@ -4,7 +4,7 @@
 import { parseCommand, matchScore } from './voice.js';
 
 const STORAGE_KEY = 'ps-data-v1';
-const APP_VERSION = '1.9 · 12.10.2026';
+const APP_VERSION = '2.0 · 16.10.2026';
 const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const DAY_LONG = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
 const MONTHS = ['януари', 'февруари', 'март', 'април', 'май', 'юни', 'юли', 'август', 'септември', 'октомври', 'ноември', 'декември'];
@@ -225,6 +225,7 @@ const ui = {
   month: todayKey().slice(0, 7),
   libCat: 'all',
   libSection: 'all',
+  noteSection: 'all',
   openGroups: new Set(),
   libSearch: '',
   showDone: false,
@@ -735,22 +736,44 @@ function noteCard(n) {
       ${!n.items.length ? '<div class="muted small">Празен списък</div>' : ''}
       ${n.items.length && !open.length ? '<div class="muted small">Всичко е отметнато ✓</div>' : ''}`;
   }
+  const sec = sectionById(n.sectionId);
   return `
-    <div class="card note-card" data-action="open-note" data-id="${n.id}">
+    <div class="card note-card ${sec ? 'has-sec sec-' + sec.id : ''}" data-action="open-note" data-id="${n.id}">
       <div class="note-head">
         <b>${n.pinned ? '⭐ ' : ''}${esc(n.title || 'Без заглавие')}</b>
         ${n.type === 'checklist' && n.items.length ? `<span class="muted small">${done}/${n.items.length}</span>` : ''}
       </div>
+      ${sec && ui.noteSection === 'all' ? `<span class="tag" style="margin-bottom:6px">${esc(sec.name)}</span>` : ''}
       ${body}
     </div>`;
 }
 
+function noteSectionChips() {
+  const count = id => state.notes.filter(n => id === 'none' ? !sectionById(n.sectionId) : n.sectionId === id).length;
+  const chip = (id, label, color) => {
+    const n = id === 'all' ? 0 : count(id);
+    return `<button class="chip ${ui.noteSection === id ? 'on' : ''}" data-action="note-section" data-id="${id}">
+      ${color ? `<i style="background:${color}"></i>` : ''}${label}${n ? ` <span>${n}</span>` : ''}</button>`;
+  };
+  return `
+    <div class="chips">
+      ${chip('all', 'Всички раздели')}
+      ${state.sections.map(x => chip(x.id, esc(x.name), x.color)).join('')}
+      ${state.sections.length ? chip('none', 'Без раздел') : ''}
+      <button class="chip add" data-action="new-section">+ Раздел</button>
+    </div>`;
+}
+
 function viewNotes() {
-  const notes = state.notes.slice().sort((a, b) =>
-    (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt.localeCompare(a.updatedAt));
+  const sec = ui.noteSection;
+  const notes = state.notes
+    .filter(n => sec === 'all' || (sec === 'none' ? !sectionById(n.sectionId) : n.sectionId === sec))
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt.localeCompare(a.updatedAt));
   return `
     <h1>Бележки</h1>
-    ${notes.length ? notes.map(noteCard).join('') : `<div class="empty">Тук пазиш важни неща: списъци за пазар, идеи, пароли за Wi-Fi, подаръци...<br><br>Всяка бележка може да е свободен текст или списък с отметки.<br>Отбележи най-важните със ⭐, за да стоят най-горе.</div>`}
+    ${noteSectionChips()}
+    ${!notes.length && state.notes.length ? '<div class="empty">Няма бележки в този раздел.<br>Добави с бутона +.</div>' : ''}
+    ${notes.length ? notes.map(noteCard).join('') : state.notes.length ? '' : `<div class="empty">Тук пазиш важни неща: списъци за пазар, идеи, пароли за Wi-Fi, подаръци...<br><br>Всяка бележка може да е свободен текст или списък с отметки.<br>Отбележи най-важните със ⭐, за да стоят най-горе.</div>`}
     <button class="fab" data-action="new-note">+</button>`;
 }
 
@@ -1396,6 +1419,11 @@ function sheetNote() {
     </div>`;
   return `
     <input class="note-title" data-note-field="title" placeholder="Заглавие" value="${esc(n.title)}" autocomplete="off" ${n.title ? '' : 'autofocus'}>
+    ${state.sections.length ? `
+      <select class="note-sec" data-note-field="sectionId" aria-label="Раздел">
+        <option value="">— Без раздел —</option>
+        ${state.sections.map(x => `<option value="${x.id}" ${n.sectionId === x.id ? 'selected' : ''}>● ${esc(x.name)}</option>`).join('')}
+      </select>` : ''}
     <div class="seg" style="margin:10px 0">
       <button class="${n.type === 'checklist' ? 'on' : ''}" data-action="note-type" data-type="checklist">☑ Списък с отметки</button>
       <button class="${n.type === 'text' ? 'on' : ''}" data-action="note-type" data-type="text">¶ Текст</button>
@@ -1563,10 +1591,16 @@ const actions = {
     if (!confirm(`Да изтрия ли раздела „${x.name}“? Задачите в него остават.`)) return;
     state.sections = state.sections.filter(z => z !== x);
     state.tasks.forEach(t => { if (t.sectionId === x.id) t.sectionId = null; });
+    state.notes.forEach(n => { if (n.sectionId === x.id) n.sectionId = null; });
+    if (ui.noteSection === x.id) ui.noteSection = 'all';
     if (ui.libSection === x.id) ui.libSection = 'all';
     save(); closeSheet(); render();
   },
-  'new-note': () => { const n = newNote({}); openSheet({ type: 'note', id: n.id }); },
+  'new-note': () => {
+    const n = newNote({ sectionId: sectionById(ui.noteSection) ? ui.noteSection : null });
+    openSheet({ type: 'note', id: n.id });
+  },
+  'note-section': el => { ui.noteSection = el.dataset.id; render(); },
   'open-note': el => openSheet({ type: 'note', id: el.dataset.id }),
   'note-item-toggle': el => {
     const n = noteById(el.dataset.note);
@@ -1815,7 +1849,10 @@ document.addEventListener('submit', ev => {
     const fields = { name, color: f.get('color') || SECTION_COLORS[0], category: f.get('category') || '' };
     const x = sectionById(sheet.id);
     if (x) Object.assign(x, fields);
-    else ui.libSection = state.sections[state.sections.push({ id: uid(), ...fields }) - 1].id;
+    else {
+      const id = state.sections[state.sections.push({ id: uid(), ...fields }) - 1].id;
+      if (ui.tab === 'notes') ui.noteSection = id; else ui.libSection = id;
+    }
     save(); closeSheet(); render();
     toast(x ? 'Разделът е запазен' : `Раздел „${name}“ е създаден`);
   } else if (form.id === 'voice-form') {
